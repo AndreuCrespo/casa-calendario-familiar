@@ -74,7 +74,18 @@ export function Shell() {
           const cls = n.where === 'narrow' ? ' hide-wide' : n.where === 'wide' ? ' hide-narrow' : '';
           const badge = badges[n.route];
           return (
-            <a key={n.route} href={href(n.route)} className={`nav-item${active ? ' active' : ''}${cls}`} aria-label={n.label}>
+            <a
+              key={n.route}
+              href={href(n.route)}
+              className={`nav-item${active ? ' active' : ''}${cls}`}
+              aria-label={n.label}
+              onClick={(e) => {
+                // Como en las apps nativas: entre pestañas no se acumula historial, así
+                // «atrás» (Android) lleva a Inicio y desde Inicio sale de la app.
+                if (n.route === route) { e.preventDefault(); window.scrollTo({ top: 0, behavior: 'smooth' }); return; }
+                if (route !== 'inicio') { e.preventDefault(); location.replace(href(n.route)); }
+              }}
+            >
               <span className="nav-ic"><n.icon size={22} strokeWidth={active ? 2.3 : 1.9} /></span>
               <span className="nav-label">{n.label}</span>
               {!!badge && <span className="nav-badge">{badge}</span>}

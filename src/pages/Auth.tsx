@@ -4,7 +4,7 @@ import {
   signInWithEmailAndPassword, signInWithPopup, signInWithRedirect, updateProfile, type User,
 } from 'firebase/auth';
 import { arrayUnion, collection, doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
-import { CalendarHeart, MapPin, Minus, Plus, UserRound } from 'lucide-react';
+import { MapPin, Minus, Plus, UserRound } from 'lucide-react';
 import { auth, db } from '../lib/firebase';
 import { isIOS, isStandalone } from '../lib/push';
 import { MEMBER_COLORS, newMemberId } from '../lib/members';
@@ -30,7 +30,7 @@ function authError(e: unknown) {
 }
 
 function Logo() {
-  return <div className="auth-logo"><CalendarHeart size={36} /></div>;
+  return <img className="auth-logo" src="/favicon.svg" alt="Casa" width={72} height={72} />;
 }
 
 export function Welcome({ onDemo }: { onDemo: () => void }) {

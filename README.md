@@ -206,7 +206,7 @@ firestore.rules  Reglas de seguridad: solo los miembros de la casa ven sus datos
 - `npm run deploy:web`: publica la web y las reglas.
 - `npm run deploy`: publica todo, funciones incluidas (necesita Blaze).
 - `npm --prefix functions test`: tests de las notificaciones (lógica, cambios de hora y un Firestore simulado).
-- `npm run icons`: regenera los iconos a partir de `public/favicon.svg`.
+- `npm run icons`: regenera los iconos (PNG y `favicon.ico`) a partir de `public/favicon.svg` y `assets/icon-full.svg`.
 
 > **WSL o Windows, pero no los dos.** `node_modules` lleva binarios nativos del sistema que hizo `npm install` (Rolldown, TypeScript, esbuild). Este proyecto está instalado desde **WSL**. Si un día lo usas desde PowerShell, borra `node_modules` y `functions/node_modules` y reinstala allí. Con el proyecto en `/mnt/d/...`, Vite vigila los archivos por sondeo para notar también los cambios hechos desde Windows (ya está configurado en `vite.config.ts`).
 

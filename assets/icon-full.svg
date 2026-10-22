@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <!-- Versión a sangre (sin esquinas) para iPhone y el icono adaptable de Android:
+       el propio sistema recorta la forma. El dibujo cabe en la zona segura (80 %). -->
+  <rect width="100" height="100" fill="#FAEBD0"/>
+  <g transform="translate(0 -4)">
+    <ellipse cx="38" cy="48" rx="10" ry="13" fill="#4C7DF0"/>
+    <ellipse cx="61" cy="47" rx="10" ry="13" fill="#E2558A"/>
+    <ellipse cx="34.5" cy="43" rx="2.2" ry="3.6" fill="#fff" opacity=".35"/>
+    <ellipse cx="57.5" cy="42" rx="2.2" ry="3.6" fill="#fff" opacity=".35"/>
+    <ellipse cx="45" cy="56" rx="7" ry="9" fill="#8B5CF6"/>
+    <ellipse cx="57" cy="57" rx="7" ry="9" fill="#22A06B"/>
+    <path d="M15 60Q50 98 85 60Z" fill="#A9743F"/>
+    <path d="M23 66Q50 82 77 66M33 74Q50 81 67 74" fill="none" stroke="#7A5128" stroke-width="3" stroke-linecap="round"/>
+    <path d="M15 60H85" stroke="#7A5128" stroke-width="5" stroke-linecap="round"/>
+  </g>
+</svg>

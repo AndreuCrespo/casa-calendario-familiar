@@ -1,4 +1,4 @@
-import { useEffect, useState, type CSSProperties, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import {
   Check, Cloud, CloudDrizzle, CloudFog, CloudLightning, CloudRain, CloudSnow, CloudSun, Moon, Sun, X,
@@ -25,13 +25,34 @@ export function Sheet({ title, onClose, children, footer }: {
   children: ReactNode;
   footer?: ReactNode;
 }) {
+  const closeRef = useRef(onClose);
+  closeRef.current = onClose;
+
   useEffect(() => {
     const prev = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
-    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && closeRef.current();
     window.addEventListener('keydown', onKey);
-    return () => { document.body.style.overflow = prev; window.removeEventListener('keydown', onKey); };
-  }, [onClose]);
+
+    // Android: el botón o gesto «atrás» cierra la hoja en vez de cambiar de pantalla.
+    // Se añade una entrada al historial mientras está abierta (con setTimeout para
+    // que el doble montaje de StrictMode en desarrollo no deje entradas sueltas).
+    const id = Math.random().toString(36).slice(2);
+    let pushed = false;
+    let closedByBack = false;
+    const t = setTimeout(() => { history.pushState({ casaSheet: id }, ''); pushed = true; }, 0);
+    const onPop = () => { closedByBack = true; closeRef.current(); };
+    window.addEventListener('popstate', onPop);
+
+    return () => {
+      document.body.style.overflow = prev;
+      window.removeEventListener('keydown', onKey);
+      window.removeEventListener('popstate', onPop);
+      clearTimeout(t);
+      // Cerrada con ✕ o Guardar: quitar la entrada que añadimos (si seguimos en ella).
+      if (pushed && !closedByBack && history.state?.casaSheet === id) history.back();
+    };
+  }, []);
 
   return createPortal(
     <div className="sheet-backdrop" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
