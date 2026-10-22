@@ -5,11 +5,11 @@
 import type {
   Activity, ActivityKind, CalEvent, Device, Household, KeyDate, KeyDateKind, Member, MenuDay,
   NotifySettings, Task,
-} from '../src/shared/types';
+} from '../../src/shared/types';
 import {
   addDays, diffDays, parts, weekday, zonedParts, zonedToUtc, type DateStr,
-} from '../src/shared/dates';
-import { expandEvents, nextKeyDate, occursOn, type Occurrence } from '../src/shared/recurrence';
+} from '../../src/shared/dates';
+import { expandEvents, nextKeyDate, occursOn, type Occurrence } from '../../src/shared/recurrence';
 
 // ---------- constantes ----------
 
@@ -456,9 +456,14 @@ function activityLine(kind: string, texts: string[]): string {
   }
 }
 
-function activityDigest(activity: Activity[], now: number): OutMessage[] {
+/**
+ * Un aviso por persona con lo que ha añadido. Por defecto solo cuenta lo no
+ * avisado; la función instantánea pasa `includeNotified` para rehacer el
+ * aviso de la ráfaga completa (mismo tag ⇒ sustituye al anterior en el móvil).
+ */
+export function activityDigest(activity: Activity[], now: number, opts: { includeNotified?: boolean } = {}): OutMessage[] {
   const recent = activity
-    .filter((a) => !a.notified && (a.createdAt ?? 0) >= now - ACTIVITY_MAX_AGE)
+    .filter((a) => (opts.includeNotified || !a.notified) && (a.createdAt ?? 0) >= now - ACTIVITY_MAX_AGE)
     .sort((a, b) => (a.createdAt ?? 0) - (b.createdAt ?? 0));
   const byActor = new Map<string, Activity[]>();
   for (const a of recent) {
@@ -485,7 +490,7 @@ function activityDigest(activity: Activity[], now: number): OutMessage[] {
       title: last.actorName?.trim() || 'Alguien de casa',
       body: kinds.map((k) => activityLine(k, byKind.get(k)!.texts)).join('\n'),
       url: KIND_URL[dominant] ?? URLS.home,
-      tag: `act_${actorUid || 'anon'}_${last.createdAt ?? now}`,
+      tag: `act_${actorUid || 'anon'}_${items[0].createdAt ?? now}`,
       urgency: 'normal',
       toUids: actorUid ? { excludeUid: actorUid } : 'all',
     });

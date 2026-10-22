@@ -1,3 +1,0 @@
-node_modules/
-# Variables locales (cuenta de servicio y claves VAPID): nunca al repositorio
-.env

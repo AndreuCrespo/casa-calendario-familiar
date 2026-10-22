@@ -2,9 +2,9 @@
 // fechas/repeticiones. Ejecutar con: npm test
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import type { Activity, CalEvent, Device, Household, KeyDate, MenuDay, Task } from '../src/shared/types';
-import { todayIn, zonedParts, zonedToUtc } from '../src/shared/dates';
-import { expandEvents, nextKeyDate, occurrenceStarts } from '../src/shared/recurrence';
+import type { Activity, CalEvent, Device, Household, KeyDate, MenuDay, Task } from '../../src/shared/types';
+import { todayIn, zonedParts, zonedToUtc } from '../../src/shared/dates';
+import { expandEvents, nextKeyDate, occurrenceStarts } from '../../src/shared/recurrence';
 import {
   computeNotifications, listEs, pushPayload, reminderFireAt, selectDevices, type ComputeInput, type OutMessage,
 } from './logic';

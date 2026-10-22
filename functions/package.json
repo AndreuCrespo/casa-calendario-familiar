@@ -1,0 +1,27 @@
+{
+  "name": "casa-functions",
+  "private": true,
+  "type": "module",
+  "main": "lib/index.js",
+  "engines": {
+    "node": "22"
+  },
+  "scripts": {
+    "build": "esbuild src/index.ts --bundle --platform=node --target=node22 --format=esm --packages=external --outfile=lib/index.js",
+    "typecheck": "tsc -p .",
+    "test": "tsx --test src/test.ts src/run.test.ts",
+    "vapid": "tsx src/vapid.ts"
+  },
+  "dependencies": {
+    "firebase-admin": "^14.5.0",
+    "firebase-functions": "^7.4.0",
+    "web-push": "^3.6.7"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.5",
+    "@types/web-push": "^3.6.4",
+    "esbuild": "^0.28.2",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2"
+  }
+}

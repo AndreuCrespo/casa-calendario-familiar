@@ -93,7 +93,7 @@ export default function SettingsPage() {
         <label className="switch">Avisar cuando el otro añade cosas
           <input type="checkbox" checked={notify.activity} onChange={(e) => setNotify({ activity: e.target.checked })} />
         </label>
-        <p className="tiny muted" style={{ paddingBottom: 6 }}>Los avisos se envían cada ~10 minutos desde GitHub Actions, así que pueden llegar con unos minutos de retraso.</p>
+        <p className="tiny muted" style={{ paddingBottom: 6 }}>Lo que añade el otro llega al momento. Los recordatorios se revisan cada 5 minutos, así que pueden llegar hasta 5 minutos tarde.</p>
       </div>
 
       <div className="section-title"><LayoutGrid size={14} /> Inicio</div>
