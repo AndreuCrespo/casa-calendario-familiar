@@ -1,0 +1,24 @@
+{
+  "name": "casa-notifier",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Envía las notificaciones push de Casa (Web Push / VAPID) desde GitHub Actions.",
+  "type": "module",
+  "scripts": {
+    "start": "tsx notify.ts",
+    "test": "tsx test.ts",
+    "vapid": "node -e \"const k=require('web-push').generateVAPIDKeys();console.log('VAPID_PUBLIC_KEY='+k.publicKey);console.log('VAPID_PRIVATE_KEY='+k.privateKey)\""
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "dependencies": {
+    "firebase-admin": "^14.5.0",
+    "web-push": "^3.6.7"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.5",
+    "@types/web-push": "^3.6.4",
+    "tsx": "^4.23.15"
+  }
+}

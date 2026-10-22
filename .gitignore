@@ -1,0 +1,17 @@
+node_modules
+dist
+dev-dist
+.firebase
+*.log
+
+# Configuración local de herramientas
+.claude/
+
+# Credenciales: nunca al repositorio
+.env
+.env.*
+!.env.example
+service-account*.json
+*firebase-adminsdk*.json
+*.pem
+*.key

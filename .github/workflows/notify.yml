@@ -1,0 +1,91 @@
+# Notificaciones push de Casa: recordatorios de eventos, resumen diario, fechas
+# clave y avisos de actividad. Ejecuta notifier/notify.ts cada 10 minutos.
+#
+# · Repositorio PÚBLICO: los minutos de GitHub Actions son gratis e ilimitados.
+# · Repositorio PRIVADO: cambia el cron '*/10 * * * *' por '*/30 * * * *' para
+#   no pasar de los 2.000 minutos gratis al mes (cada ejecución cuenta al menos
+#   1 minuto: cada 10 min salen ~4.400 min/mes; cada 30 min, ~1.500).
+# · El cron de GitHub no es puntual: puede llegar con unos minutos de retraso
+#   (más en horas punta). El notificador recuerda su última ejecución y recupera
+#   los avisos de hasta 45 minutos atrás, así que un retraso no los pierde.
+# · GitHub desactiva los workflows programados tras 60 días sin actividad en el
+#   repositorio; el trabajo «mantener-activo» lo reactiva cada día para evitarlo.
+# · Los registros de Actions de un repositorio público los puede ver cualquiera:
+#   el notificador solo escribe identificadores y recuentos, nunca textos.
+#
+# Secretos necesarios (Settings → Secrets and variables → Actions):
+#   FIREBASE_SERVICE_ACCOUNT  JSON completo de la clave de la cuenta de servicio
+#   VAPID_PUBLIC_KEY / VAPID_PRIVATE_KEY  generadas con «npm run vapid» en notifier/
+#   VAPID_SUBJECT             p. ej. mailto:alguien@ejemplo.com
+name: Notificaciones
+
+on:
+  schedule:
+    - cron: '*/10 * * * *' # notificador
+    - cron: '17 3 * * *' # mantenimiento diario (03:17 UTC); si lo cambias, cámbialo también en los «if»
+  workflow_dispatch: # lanzar el notificador a mano desde la pestaña Actions
+
+permissions:
+  contents: read
+
+jobs:
+  notificar:
+    # Todas las ejecuciones excepto la del cron de mantenimiento.
+    if: github.event.schedule != '17 3 * * *'
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    # Nunca dos notificadores a la vez (si uno se retrasa, el siguiente espera).
+    concurrency:
+      group: casa-notificador
+      cancel-in-progress: false
+    defaults:
+      run:
+        working-directory: notifier
+    steps:
+      # Mientras no estén los secretos (ver README) no hace nada y termina en verde,
+      # para no llenar el correo de avisos de fallo cada 10 minutos.
+      - name: Comprobar configuración
+        id: config
+        working-directory: .
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          VAPID_PRIVATE_KEY: ${{ secrets.VAPID_PRIVATE_KEY }}
+        run: |
+          if [ -z "$FIREBASE_SERVICE_ACCOUNT" ] || [ -z "$VAPID_PRIVATE_KEY" ]; then
+            echo "::notice::Faltan los secretos del notificador (ver README). No se envía nada."
+            echo "listo=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "listo=true" >> "$GITHUB_OUTPUT"
+          fi
+      - uses: actions/checkout@v7
+        if: steps.config.outputs.listo == 'true'
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        if: steps.config.outputs.listo == 'true'
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: notifier/package-lock.json
+      - run: npm ci --no-audit --no-fund
+        if: steps.config.outputs.listo == 'true'
+      - run: npm start
+        if: steps.config.outputs.listo == 'true'
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          VAPID_PUBLIC_KEY: ${{ secrets.VAPID_PUBLIC_KEY }}
+          VAPID_PRIVATE_KEY: ${{ secrets.VAPID_PRIVATE_KEY }}
+          VAPID_SUBJECT: ${{ secrets.VAPID_SUBJECT }}
+
+  mantener-activo:
+    # Solo en el cron diario: vuelve a activar este workflow para que GitHub no lo
+    # desactive por inactividad del repositorio.
+    if: github.event.schedule == '17 3 * * *'
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    permissions:
+      actions: write
+    steps:
+      - run: gh api -X PUT "repos/${{ github.repository }}/actions/workflows/notify.yml/enable"
+        env:
+          GH_TOKEN: ${{ github.token }}

@@ -1,0 +1,4 @@
+# Saltos de línea LF en el repositorio (se trabaja desde WSL y Windows)
+* text=auto eol=lf
+*.png binary
+*.ico binary
