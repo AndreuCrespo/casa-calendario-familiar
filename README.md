@@ -41,7 +41,7 @@ Abre http://localhost:5173 y pulsa **Probar en modo demo**. Los datos de ejemplo
 
 ---
 
-## Puesta en marcha (una sola vez, unos 30 minutos)
+## Puesta en marcha
 
 ### 1. Crear el proyecto de Firebase
 
