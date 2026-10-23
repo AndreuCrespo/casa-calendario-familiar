@@ -42,7 +42,8 @@ export class FirestoreBackend implements Backend {
     return onSnapshot(
       this.col(coll),
       (snap) => cb(snap.docs.map((d) => ({ ...d.data(), id: d.id }) as T)),
-      (e) => { report(e); onError?.(e); },
+      // Quien reintenta (CollectionCache) decide cuándo avisar; si no hay nadie, se avisa ya.
+      (e) => { console.warn(`watch ${coll}:`, e); if (onError) onError(e); else report(e); },
     );
   }
 

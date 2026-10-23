@@ -14,21 +14,37 @@ export class CollectionCache {
   private data = new Map<string, unknown[]>();
   private subs = new Map<string, Set<() => void>>();
   private started = new Set<string>();
+  private failures = new Map<string, number>();
 
   constructor(private backend: Backend) {}
 
   subscribe = (coll: string, fn: () => void) => {
     if (!this.subs.has(coll)) this.subs.set(coll, new Set());
     this.subs.get(coll)!.add(fn);
-    if (!this.started.has(coll)) {
-      this.started.add(coll);
-      this.backend.watch(coll, (items) => {
-        this.data.set(coll, items);
-        this.subs.get(coll)?.forEach((f) => f());
-      });
-    }
+    if (!this.started.has(coll)) this.start(coll);
     return () => { this.subs.get(coll)?.delete(fn); };
   };
+
+  private start(coll: string) {
+    this.started.add(coll);
+    this.backend.watch(
+      coll,
+      (items) => {
+        this.failures.delete(coll);
+        this.data.set(coll, items);
+        this.subs.get(coll)?.forEach((f) => f());
+      },
+      (e) => {
+        // Una suscripción que falla se cierra: se reintenta con esperas crecientes
+        // (p. ej. permisos que el servidor aún no ha aplicado) y solo se avisa si persiste.
+        this.started.delete(coll);
+        const n = (this.failures.get(coll) ?? 0) + 1;
+        this.failures.set(coll, n);
+        if (n === 3) window.dispatchEvent(new CustomEvent('casa:error', { detail: e.message }));
+        setTimeout(() => { if (!this.started.has(coll)) this.start(coll); }, Math.min(30_000, 1000 * 2 ** (n - 1)));
+      },
+    );
+  }
 
   get = (coll: string) => this.data.get(coll);
 }

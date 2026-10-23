@@ -47,7 +47,14 @@ function HouseholdGate({ user }: { user: User }) {
 
   useEffect(() => {
     const q = query(collection(db!, 'households'), where('memberUids', 'array-contains', user.uid));
-    return onSnapshot(q, (snap) => setHid(snap.docs[0]?.id ?? null), (e) => {
+    // Solo se entra en una casa ya confirmada por el servidor. Justo después de
+    // crearla o de unirse, Firestore la muestra en local antes de guardarla, y
+    // si entráramos ya, las reglas aún no nos verían como miembros (permiso denegado).
+    return onSnapshot(q, { includeMetadataChanges: true }, (snap) => {
+      const confirmed = snap.docs.find((d) => !d.metadata.hasPendingWrites);
+      if (confirmed) setHid(confirmed.id);
+      else if (!snap.docs.length) setHid(null);
+    }, (e) => {
       console.error(e);
       setHid(null);
     });

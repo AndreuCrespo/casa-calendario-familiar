@@ -68,8 +68,10 @@ npm install -g firebase-tools
 ```
 
 ```bash
-firebase login
+firebase login --no-localhost
 ```
+
+(`--no-localhost` te da un código para pegar en la terminal; desde WSL el inicio de sesión normal a veces no vuelve a la terminal)
 
 ```bash
 firebase use --add
@@ -155,6 +157,8 @@ La primera vez te preguntará:
 Esos dos valores se guardan en `functions/.env.TU-PROYECTO`, que no se sube al repositorio. Si te pregunta cuántos días guardar las imágenes de las funciones, responde **1** para no ocupar almacenamiento.
 
 > Es normal que el primer despliegue de la función que reacciona a Firestore falle con un error de permisos de *Eventarc*: Google tarda unos minutos en preparar sus permisos. Espera 5 minutos y repite `npm run deploy`.
+>
+> `npm run deploy` ya amplía a 120 s el tiempo que la CLI tiene para analizar las funciones (`FUNCTIONS_DISCOVERY_TIMEOUT`). Los 10 s por defecto no bastan desde WSL con el proyecto en `/mnt/…`, porque leer `node_modules` en el disco de Windows es lento (error *User code failed to load … Timeout after 10000*).
 
 ### d) Activarlas en cada móvil
 

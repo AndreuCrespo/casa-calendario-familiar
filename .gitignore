@@ -15,3 +15,6 @@ service-account*.json
 *firebase-adminsdk*.json
 *.pem
 *.key
+
+# Proyecto de Firebase de cada uno (firebase use --add)
+.firebaserc
