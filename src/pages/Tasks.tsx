@@ -2,14 +2,19 @@ import { useMemo, useState } from 'react';
 import { ListChecks, Plus, Repeat, Trash2 } from 'lucide-react';
 import { useApp, useCollection, useToday } from '../lib/app';
 import { dayRelative, memberNames } from '../lib/format';
+import { DONE_TASK_TTL_DAYS, doneTasks } from '../lib/tasks';
 import { nextTaskDue } from '../shared/recurrence';
 import type { RepeatUnit, Task } from '../shared/types';
 import { CheckCircle, Empty, MemberDots, MemberPicker, PageHead, Sheet, toast } from '../components/ui';
+import { t, tn } from '../i18n';
 
+const UNIT_KEY = { day: 'unit.day', week: 'unit.week', month: 'unit.month' } as const;
+const UNIT_NOUN_KEY = { day: 'unitNoun.day', week: 'unitNoun.week', month: 'unitNoun.month' } as const;
+
+/** "every 2 weeks" / "cada 2 semanas" */
 function repeatLabel(r: Task['repeat']) {
   if (!r) return '';
-  const u = { day: ['día', 'días'], week: ['semana', 'semanas'], month: ['mes', 'meses'] }[r.unit];
-  return r.every === 1 ? `cada ${u[0]}` : `cada ${r.every} ${u[1]}`;
+  return t('repeat.everyUnit', { unit: tn(UNIT_KEY[r.unit], r.every) });
 }
 
 export default function Tasks() {
@@ -21,47 +26,54 @@ export default function Tasks() {
 
   const groups = useMemo(() => {
     let list = tasks ?? [];
-    if (mine && me) list = list.filter((t) => !t.memberIds.length || t.memberIds.includes(me.id));
-    const open = list.filter((t) => !t.done).sort((a, b) => (a.due ?? '9999') < (b.due ?? '9999') ? -1 : 1);
+    if (mine && me) list = list.filter((x) => !x.memberIds.length || x.memberIds.includes(me.id));
+    const open = list.filter((x) => !x.done).sort((a, b) => (a.due ?? '9999') < (b.due ?? '9999') ? -1 : 1);
     return {
-      overdue: open.filter((t) => t.due && t.due < today),
-      today: open.filter((t) => t.due === today),
-      upcoming: open.filter((t) => t.due && t.due > today),
-      someday: open.filter((t) => !t.due),
-      done: list.filter((t) => t.done).sort((a, b) => (b.lastDoneAt ?? 0) - (a.lastDoneAt ?? 0)).slice(0, 15),
+      overdue: open.filter((x) => x.due && x.due < today),
+      today: open.filter((x) => x.due === today),
+      upcoming: open.filter((x) => x.due && x.due > today),
+      someday: open.filter((x) => !x.due),
+      done: list.filter((x) => x.done).sort((a, b) => (b.lastDoneAt ?? 0) - (a.lastDoneAt ?? 0)),
     };
   }, [tasks, today, mine, me]);
 
-  const complete = (t: Task) => {
-    if (t.done) {
-      backend.update('tasks', t.id, { done: false });
+  const complete = (task: Task) => {
+    if (task.done) {
+      backend.update('tasks', task.id, { done: false });
       return;
     }
-    const prev = { due: t.due ?? null, done: t.done, lastDoneAt: t.lastDoneAt ?? null, lastDoneBy: t.lastDoneBy ?? null };
-    if (t.repeat) {
-      const next = nextTaskDue(t, today);
-      backend.update('tasks', t.id, { due: next, lastDoneAt: Date.now(), lastDoneBy: me?.id ?? null });
-      toast(`Hecho ✓ Próxima: ${dayRelative(next!, today).toLowerCase()}`, { label: 'Deshacer', run: () => backend.update('tasks', t.id, prev) });
+    const prev = { due: task.due ?? null, done: task.done, lastDoneAt: task.lastDoneAt ?? null, lastDoneBy: task.lastDoneBy ?? null };
+    const undo = { label: t('common.undo'), run: () => backend.update('tasks', task.id, prev) };
+    if (task.repeat) {
+      const next = nextTaskDue(task, today);
+      backend.update('tasks', task.id, { due: next, lastDoneAt: Date.now(), lastDoneBy: me?.id ?? null });
+      toast(t('tasks.doneNext', { when: dayRelative(next!, today).toLowerCase() }), undo);
     } else {
-      backend.update('tasks', t.id, { done: true, lastDoneAt: Date.now(), lastDoneBy: me?.id ?? null });
-      toast('Hecho ✓', { label: 'Deshacer', run: () => backend.update('tasks', t.id, prev) });
+      backend.update('tasks', task.id, { done: true, lastDoneAt: Date.now(), lastDoneBy: me?.id ?? null });
+      toast(t('tasks.doneToast'), undo);
     }
   };
 
-  const Row = ({ t }: { t: Task }) => {
-    const overdue = !t.done && t.due && t.due < today;
+  const clearDone = () => {
+    const list = doneTasks(tasks ?? []);
+    list.forEach((x) => backend.remove('tasks', x.id));
+    toast(tn('tasks.cleared', list.length));
+  };
+
+  const Row = ({ task }: { task: Task }) => {
+    const overdue = !task.done && task.due && task.due < today;
     return (
-      <div className={`list-item${t.done ? ' done' : ''}`}>
-        <CheckCircle on={t.done} onClick={() => complete(t)} />
-        <div className="grow clickable" style={{ minWidth: 0, cursor: 'pointer' }} onClick={() => setEditing(t)}>
-          <div className="item-title">{t.title}</div>
+      <div className={`list-item${task.done ? ' done' : ''}`}>
+        <CheckCircle on={task.done} onClick={() => complete(task)} />
+        <div className="grow clickable" style={{ minWidth: 0, cursor: 'pointer' }} onClick={() => setEditing(task)}>
+          <div className="item-title">{task.title}</div>
           <div className="item-sub row" style={{ gap: 6 }}>
-            {t.due && !t.done && <span style={overdue ? { color: 'var(--red)', fontWeight: 700 } : undefined}>{dayRelative(t.due, today)}</span>}
-            {t.repeat && <span className="row" style={{ gap: 3 }}><Repeat size={12} />{repeatLabel(t.repeat)}</span>}
-            {t.memberIds.length > 0 && <span className="ellipsis">{(t.due && !t.done) || t.repeat ? '· ' : ''}{memberNames(t.memberIds, members)}</span>}
+            {task.due && !task.done && <span style={overdue ? { color: 'var(--red)', fontWeight: 700 } : undefined}>{dayRelative(task.due, today)}</span>}
+            {task.repeat && <span className="row" style={{ gap: 3 }}><Repeat size={12} />{repeatLabel(task.repeat)}</span>}
+            {task.memberIds.length > 0 && <span className="ellipsis">{(task.due && !task.done) || task.repeat ? '· ' : ''}{memberNames(task.memberIds, members)}</span>}
           </div>
         </div>
-        <MemberDots ids={t.memberIds} members={members} />
+        <MemberDots ids={task.memberIds} members={members} />
       </div>
     );
   };
@@ -69,7 +81,7 @@ export default function Tasks() {
   const Section = ({ title, list }: { title: string; list: Task[] }) => list.length ? (
     <>
       <div className="section-title">{title}</div>
-      <div className="list">{list.map((t) => <Row key={t.id} t={t} />)}</div>
+      <div className="list">{list.map((x) => <Row key={x.id} task={x} />)}</div>
     </>
   ) : null;
 
@@ -77,24 +89,35 @@ export default function Tasks() {
 
   return (
     <>
-      <PageHead title="Tareas" sub={`${groups.overdue.length + groups.today.length} para hoy`}>
+      <PageHead title={t('nav.tasks')} sub={t('tasks.forToday', { n: groups.overdue.length + groups.today.length })}>
         <div className="seg">
-          <button className={!mine ? 'on' : ''} onClick={() => setMine(false)}>Todas</button>
-          <button className={mine ? 'on' : ''} onClick={() => setMine(true)}>Mías</button>
+          <button className={!mine ? 'on' : ''} onClick={() => setMine(false)}>{t('tasks.all')}</button>
+          <button className={mine ? 'on' : ''} onClick={() => setMine(true)}>{t('tasks.mine')}</button>
         </div>
       </PageHead>
 
       {tasks && totalOpen === 0 && (
-        <Empty icon={ListChecks} title="Nada pendiente">Añade tareas de casa: las que se repiten vuelven solas cuando las marcas.</Empty>
+        <Empty icon={ListChecks} title={t('tasks.emptyTitle')}>{t('tasks.emptyText')}</Empty>
       )}
 
-      <Section title="Atrasadas" list={groups.overdue} />
-      <Section title="Hoy" list={groups.today} />
-      <Section title="Próximas" list={groups.upcoming} />
-      <Section title="Sin fecha" list={groups.someday} />
-      <Section title="Hechas" list={groups.done} />
+      <Section title={t('tasks.overdue')} list={groups.overdue} />
+      <Section title={t('date.today')} list={groups.today} />
+      <Section title={t('tasks.upcoming')} list={groups.upcoming} />
+      <Section title={t('tasks.noDate')} list={groups.someday} />
 
-      <button className="fab" onClick={() => setEditing('new')} aria-label="Nueva tarea"><Plus size={28} /></button>
+      {groups.done.length > 0 && (
+        <>
+          <div className="section-title">
+            <span>{t('tasks.done')}</span>
+            <div className="grow" />
+            <button className="btn ghost sm" onClick={clearDone}><Trash2 size={15} /> {t('tasks.clearDone')}</button>
+          </div>
+          <div className="list">{groups.done.map((x) => <Row key={x.id} task={x} />)}</div>
+          <p className="tiny muted" style={{ margin: '8px 4px 0' }}>{t('tasks.autoDelete', { n: DONE_TASK_TTL_DAYS })}</p>
+        </>
+      )}
+
+      <button className="fab" onClick={() => setEditing('new')} aria-label={t('tasks.new')}><Plus size={28} /></button>
       {editing && <TaskEditor task={editing === 'new' ? undefined : editing} onClose={() => setEditing(null)} />}
     </>
   );
@@ -113,7 +136,7 @@ function TaskEditor({ task, onClose }: { task?: Task; onClose: () => void }) {
   const [notes, setNotes] = useState(task?.notes ?? '');
 
   const save = () => {
-    if (!title.trim()) { toast('Ponle un nombre'); return; }
+    if (!title.trim()) { toast(t('tasks.needName')); return; }
     const data = {
       title: title.trim(),
       memberIds,
@@ -131,45 +154,45 @@ function TaskEditor({ task, onClose }: { task?: Task; onClose: () => void }) {
 
   return (
     <Sheet
-      title={task ? 'Editar tarea' : 'Nueva tarea'}
+      title={task ? t('tasks.edit') : t('tasks.new')}
       onClose={onClose}
       footer={<>
-        {task && <button className="btn danger" style={{ flex: 'none' }} onClick={() => { backend.remove('tasks', task.id); onClose(); }} aria-label="Borrar"><Trash2 size={20} /></button>}
-        <button className="btn accent" onClick={save}>Guardar</button>
+        {task && <button className="btn danger" style={{ flex: 'none' }} onClick={() => { backend.remove('tasks', task.id); onClose(); }} aria-label={t('common.delete')}><Trash2 size={20} /></button>}
+        <button className="btn accent" onClick={save}>{t('common.save')}</button>
       </>}
     >
-      <input className="input" style={{ fontSize: 18, fontWeight: 700 }} placeholder="Ej: Sacar la basura" value={title}
+      <input className="input" style={{ fontSize: 18, fontWeight: 700 }} placeholder={t('tasks.titlePlaceholder')} value={title}
         onChange={(e) => setTitle(e.target.value)} autoFocus={!task} />
-      <div className="field"><span>¿Quién se encarga?</span>
+      <div className="field"><span>{t('tasks.who')}</span>
         <MemberPicker members={members} value={memberIds} onChange={setMemberIds} />
       </div>
-      <label className="switch">Tiene fecha
+      <label className="switch">{t('tasks.hasDate')}
         <input type="checkbox" checked={hasDue} onChange={(e) => setHasDue(e.target.checked)} />
       </label>
       {hasDue && (
-        <label className="field"><span>{repeatOn ? 'Próxima vez' : 'Para el día'}</span>
+        <label className="field"><span>{repeatOn ? t('tasks.nextTime') : t('tasks.dueOn')}</span>
           <input type="date" value={due} onChange={(e) => e.target.value && setDue(e.target.value)} />
         </label>
       )}
-      <label className="switch">Se repite
+      <label className="switch">{t('tasks.repeats')}
         <input type="checkbox" checked={repeatOn} onChange={(e) => setRepeatOn(e.target.checked)} />
       </label>
       {repeatOn && (
         <div className="grid2">
-          <label className="field"><span>Cada</span>
+          <label className="field"><span>{t('repeat.every')}</span>
             <input type="number" min={1} max={365} value={every} onChange={(e) => setEvery(Number(e.target.value))} />
           </label>
           <label className="field"><span>&nbsp;</span>
             <select value={unit} onChange={(e) => setUnit(e.target.value as RepeatUnit)}>
-              <option value="day">{every === 1 ? 'día' : 'días'}</option>
-              <option value="week">{every === 1 ? 'semana' : 'semanas'}</option>
-              <option value="month">{every === 1 ? 'mes' : 'meses'}</option>
+              {(['day', 'week', 'month'] as const).map((u) => (
+                <option key={u} value={u}>{tn(UNIT_NOUN_KEY[u], every)}</option>
+              ))}
             </select>
           </label>
         </div>
       )}
-      <label className="field"><span>Notas</span>
-        <textarea value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Opcional" />
+      <label className="field"><span>{t('common.notes')}</span>
+        <textarea value={notes} onChange={(e) => setNotes(e.target.value)} placeholder={t('common.optional')} />
       </label>
     </Sheet>
   );

@@ -1,13 +1,15 @@
-// Cloud Functions de Casa (plan Blaze; a uso familiar entra en la capa gratuita).
+// Casa's Cloud Functions (Blaze plan; family usage fits in the free tier).
 //
-// · notificationsTick   cada 5 min: recordatorios de eventos, resumen de la mañana
-//                       y fechas clave (también recoge actividad que se escapara).
-// · onActivityCreated   al momento: «Sam ha añadido a la compra: leche, pan…».
+// · notificationsTick   every 5 min: event reminders, morning summary and key
+//                       dates (also picks up any activity that slipped through).
+// · onActivityCreated   right away: "Sam added to the shopping list: milk, bread…".
 //
-// Configuración (ver README):
+// Each device gets its notifications in its own language (devices/{id}.lang).
+//
+// Configuration (see README):
 //   firebase functions:secrets:set VAPID_PRIVATE_KEY
-//   VAPID_PUBLIC_KEY y VAPID_SUBJECT se piden la primera vez en `firebase deploy`
-//   y se guardan en functions/.env.<proyecto> (no se sube al repositorio).
+//   VAPID_PUBLIC_KEY and VAPID_SUBJECT are asked for on the first `firebase deploy`
+//   and saved in functions/.env.<project> (not committed to the repository).
 import { initializeApp } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
 import { onSchedule } from 'firebase-functions/v2/scheduler';
@@ -16,19 +18,19 @@ import { defineSecret, defineString } from 'firebase-functions/params';
 import { configureVapid, processActivity, processAllHouseholds } from './run';
 
 /**
- * Región de la base de datos de Firestore: el disparador debe estar en la misma.
- * Si al crear Firestore elegiste otra ubicación, cámbiala aquí (p. ej. 'eur3' → 'europe-west1').
+ * Region of the Firestore database: the trigger must be in the same one.
+ * If you picked another location when creating Firestore, change it here (e.g. 'eur3' → 'europe-west1').
  */
 const FIRESTORE_REGION = 'europe-southwest1';
-/** Cloud Scheduler no está disponible en Madrid: la tarea programada va en Bélgica. */
+/** Cloud Scheduler isn't available in Madrid: the scheduled job runs in Belgium. */
 const SCHEDULER_REGION = 'europe-west1';
 
 const VAPID_PRIVATE_KEY = defineSecret('VAPID_PRIVATE_KEY');
 const VAPID_PUBLIC_KEY = defineString('VAPID_PUBLIC_KEY', {
-  description: 'Clave pública VAPID (la misma que VITE_VAPID_PUBLIC_KEY de la app)',
+  description: 'VAPID public key (the same as VITE_VAPID_PUBLIC_KEY in the app)',
 });
 const VAPID_SUBJECT = defineString('VAPID_SUBJECT', {
-  description: 'Contacto para los servicios push, p. ej. mailto:tu-correo@ejemplo.com',
+  description: 'Contact for the push services, e.g. mailto:you@example.com',
 });
 
 initializeApp();
@@ -71,7 +73,7 @@ export const onActivityCreated = onDocumentCreated(
   async (event) => {
     vapid();
     const { hid, activityId } = event.params;
-    // Espera unos segundos por si se añaden más cosas seguidas (un solo aviso).
+    // Wait a few seconds in case more things are added in a row (a single notification).
     await processActivity(db, db.collection('households').doc(hid), activityId, 6_000);
   },
 );

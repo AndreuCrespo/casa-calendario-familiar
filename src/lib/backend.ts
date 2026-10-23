@@ -1,5 +1,5 @@
-// Acceso a datos de una casa. Dos implementaciones con la misma interfaz:
-// Firestore (real, sincronizado) y localStorage (modo demo).
+// Data access for one household. Two implementations share the interface:
+// Firestore (real, synced) and localStorage (demo mode).
 import {
   collection, deleteDoc, doc, onSnapshot, setDoc, updateDoc, type Firestore,
 } from 'firebase/firestore';
@@ -14,7 +14,7 @@ export interface Backend {
   watchHousehold(cb: Listener<Household | null>): () => void;
   updateHousehold(data: Partial<Household>): Promise<void>;
   newId(): string;
-  /** Crea un documento y devuelve su id (la escritura sigue en segundo plano). */
+  /** Creates a document and returns its id (the write continues in the background). */
   add(coll: string, data: Data): string;
   set(coll: string, id: string, data: Data, merge?: boolean): Promise<void>;
   update(coll: string, id: string, data: Data): Promise<void>;
@@ -42,7 +42,7 @@ export class FirestoreBackend implements Backend {
     return onSnapshot(
       this.col(coll),
       (snap) => cb(snap.docs.map((d) => ({ ...d.data(), id: d.id }) as T)),
-      // Quien reintenta (CollectionCache) decide cuándo avisar; si no hay nadie, se avisa ya.
+      // Whoever retries (CollectionCache) decides when to tell the user; without one, report now.
       (e) => { console.warn(`watch ${coll}:`, e); if (onError) onError(e); else report(e); },
     );
   }
@@ -82,7 +82,7 @@ export class FirestoreBackend implements Backend {
   }
 }
 
-// ---------------- modo demo ----------------
+// ---------------- demo mode ----------------
 
 const PREFIX = 'casa-demo:';
 

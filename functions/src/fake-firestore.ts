@@ -1,4 +1,4 @@
-// Firestore en memoria con lo justo que usa run.ts, para tests sin emulador.
+// In-memory Firestore with just what run.ts uses, for tests without the emulator.
 /* eslint-disable @typescript-eslint/no-explicit-any */
 type Data = Record<string, any>;
 type Op = '==' | '>=' | '<=' | '<' | '>' | 'in';
@@ -76,7 +76,7 @@ export class FakeFirestore {
     const b = this.batch();
     return { ...b, close: b.commit };
   }
-  /** Para meter datos: seed('households/h1/events/e1', {...}) */
+  /** To insert data: seed('households/h1/events/e1', {...}) */
   seed(path: string, data: Data) { this.store.set(path, structuredClone(data)); }
   get(path: string) { return this.store.get(path); }
 }

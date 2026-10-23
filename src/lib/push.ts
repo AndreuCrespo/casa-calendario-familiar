@@ -1,5 +1,6 @@
-// Suscripción Web Push (VAPID). El envío lo hace notifier/ desde GitHub Actions.
+// Web Push subscription (VAPID). The Cloud Functions in functions/ send the notifications.
 import type { Backend } from './backend';
+import { getLang, t } from '../i18n';
 
 export const VAPID_PUBLIC_KEY = import.meta.env.VITE_VAPID_PUBLIC_KEY as string | undefined;
 
@@ -38,9 +39,9 @@ async function deviceId(endpoint: string) {
 }
 
 export async function enablePush(backend: Backend, uid: string) {
-  if (!VAPID_PUBLIC_KEY) throw new Error('Falta VITE_VAPID_PUBLIC_KEY');
+  if (!VAPID_PUBLIC_KEY) throw new Error(t('push.noKey'));
   const perm = await Notification.requestPermission();
-  if (perm !== 'granted') throw new Error('Permiso de notificaciones denegado');
+  if (perm !== 'granted') throw new Error(t('push.permissionDenied'));
   const reg = await navigator.serviceWorker.ready;
   const sub = await reg.pushManager.subscribe({
     userVisibleOnly: true,
@@ -52,7 +53,16 @@ export async function enablePush(backend: Backend, uid: string) {
     subscription: { endpoint: json.endpoint, keys: json.keys },
     ua: navigator.userAgent.slice(0, 200),
     createdAt: Date.now(),
+    lang: getLang(),
   });
+}
+
+/** Updates this device's notification language (if notifications are on here). */
+export async function updatePushLang(backend: Backend) {
+  if (!('serviceWorker' in navigator)) return;
+  const reg = await navigator.serviceWorker.getRegistration();
+  const sub = await reg?.pushManager.getSubscription();
+  if (sub) await backend.update('devices', await deviceId(sub.endpoint), { lang: getLang() });
 }
 
 export async function disablePush(backend: Backend) {

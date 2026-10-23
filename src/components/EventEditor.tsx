@@ -1,20 +1,24 @@
 import { useState } from 'react';
 import { Trash2 } from 'lucide-react';
 import { useApp } from '../lib/app';
-import { DOW_LETTER, dayLong } from '../lib/format';
+import { dayLong, dowLetter } from '../lib/format';
 import { addDays, timeToMinutes, weekday, type DateStr } from '../shared/dates';
 import type { CalEvent, Freq } from '../shared/types';
 import { MemberPicker, Sheet, toast } from './ui';
+import { t, tn, type MessageKey } from '../i18n';
 
 type RepeatSel = 'none' | Freq;
 
-const TIMED_REMINDERS: [number | null, string][] = [
-  [null, 'Sin aviso'], [0, 'A la hora'], [10, '10 min antes'], [30, '30 min antes'],
-  [60, '1 hora antes'], [120, '2 horas antes'], [1440, '1 día antes'],
+const TIMED_REMINDERS: [number | null, MessageKey][] = [
+  [null, 'reminder.none'], [0, 'reminder.atTime'], [10, 'reminder.min10'], [30, 'reminder.min30'],
+  [60, 'reminder.hour1'], [120, 'reminder.hours2'], [1440, 'reminder.day1'],
 ];
-const ALLDAY_REMINDERS: [number | null, string][] = [
-  [null, 'Sin aviso'], [0, 'Ese día a las 9:00'], [780, 'El día antes a las 20:00'],
+// All-day events: minutes before 09:00 (0 = 09:00 that day, 780 = 20:00 the day before)
+const ALLDAY_REMINDERS: [number | null, MessageKey][] = [
+  [null, 'reminder.none'], [0, 'reminder.sameDay9'], [780, 'reminder.dayBefore20'],
 ];
+
+const UNIT_KEY = { daily: 'unit.day', weekly: 'unit.week', monthly: 'unit.month', yearly: 'unit.year' } as const;
 
 function plusHour(t: string) {
   const m = (timeToMinutes(t) + 60) % 1440;
@@ -28,8 +32,8 @@ function nextHour() {
 
 export function EventEditor({ event, date, occurrence, onClose }: {
   event?: CalEvent;
-  date?: DateStr; // para eventos nuevos
-  occurrence?: DateStr; // repetición concreta que se abrió
+  date?: DateStr; // for new events
+  occurrence?: DateStr; // the specific occurrence that was opened
   onClose: () => void;
 }) {
   const { backend, me, members, log } = useApp();
@@ -52,17 +56,18 @@ export function EventEditor({ event, date, occurrence, onClose }: {
 
   const reminders = allDay ? ALLDAY_REMINDERS : TIMED_REMINDERS;
 
-  const onStartTime = (t: string) => {
-    if (startTime && endTime && t) {
+  // Moving the start keeps the duration
+  const onStartTime = (value: string) => {
+    if (startTime && endTime && value) {
       const dur = (timeToMinutes(endTime) - timeToMinutes(startTime) + 1440) % 1440;
-      const m = (timeToMinutes(t) + dur) % 1440;
+      const m = (timeToMinutes(value) + dur) % 1440;
       setEndTime(`${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`);
     }
-    setStartTime(t);
+    setStartTime(value);
   };
 
   const save = () => {
-    if (!title.trim()) { toast('Ponle un título'); return; }
+    if (!title.trim()) { toast(t('event.needTitle')); return; }
     const data: Omit<CalEvent, 'id'> = {
       title: title.trim(),
       date: start,
@@ -100,43 +105,43 @@ export function EventEditor({ event, date, occurrence, onClose }: {
 
   return (
     <Sheet
-      title={event ? 'Editar evento' : 'Nuevo evento'}
+      title={event ? t('event.edit') : t('event.new')}
       onClose={onClose}
       footer={askDelete ? (
         <div className="stack" style={{ width: '100%', gap: 8 }}>
           {event?.recurrence && occurrence && (
-            <button className="btn soft block" onClick={removeOne}>Borrar solo el {dayLong(occurrence)}</button>
+            <button className="btn soft block" onClick={removeOne}>{t('event.deleteOne', { day: dayLong(occurrence) })}</button>
           )}
           <button className="btn block" style={{ background: 'var(--red)', color: '#fff' }} onClick={removeAll}>
-            {event?.recurrence ? 'Borrar todas las repeticiones' : 'Sí, borrar'}
+            {event?.recurrence ? t('event.deleteAll') : t('common.confirmDelete')}
           </button>
-          <button className="btn ghost block" onClick={() => setAskDelete(false)}>Cancelar</button>
+          <button className="btn ghost block" onClick={() => setAskDelete(false)}>{t('common.cancel')}</button>
         </div>
       ) : (
         <>
-          {event && <button className="btn danger" style={{ flex: 'none' }} onClick={() => setAskDelete(true)} aria-label="Borrar"><Trash2 size={20} /></button>}
-          <button className="btn accent" onClick={save}>Guardar</button>
+          {event && <button className="btn danger" style={{ flex: 'none' }} onClick={() => setAskDelete(true)} aria-label={t('common.delete')}><Trash2 size={20} /></button>}
+          <button className="btn accent" onClick={save}>{t('common.save')}</button>
         </>
       )}
     >
       <input
         className="input"
         style={{ fontSize: 19, fontWeight: 700 }}
-        placeholder="¿Qué pasa?"
+        placeholder={t('event.titlePlaceholder')}
         value={title}
         onChange={(e) => setTitle(e.target.value)}
         autoFocus={!event}
       />
-      <div className="field"><span>¿Quién?</span>
+      <div className="field"><span>{t('event.who')}</span>
         <MemberPicker members={members} value={memberIds} onChange={setMemberIds} />
       </div>
 
-      <label className="switch">Todo el día
+      <label className="switch">{t('date.allDay')}
         <input type="checkbox" checked={allDay} onChange={(e) => { setAllDay(e.target.checked); setReminder(null); }} />
       </label>
 
       <div className="grid2">
-        <label className="field"><span>{multi ? 'Desde' : 'Día'}</span>
+        <label className="field"><span>{multi ? t('event.from') : t('event.day')}</span>
           <input type="date" value={start} onChange={(e) => {
             const v = e.target.value; if (!v) return;
             setStart(v);
@@ -145,40 +150,40 @@ export function EventEditor({ event, date, occurrence, onClose }: {
           }} />
         </label>
         {multi ? (
-          <label className="field"><span>Hasta</span>
+          <label className="field"><span>{t('event.to')}</span>
             <input type="date" value={end} min={start} onChange={(e) => e.target.value && setEnd(e.target.value)} />
           </label>
         ) : (
           <div className="field"><span>&nbsp;</span>
-            <button type="button" className="btn soft" onClick={() => { setMulti(true); setEnd(addDays(start, 1)); }}>Varios días</button>
+            <button type="button" className="btn soft" onClick={() => { setMulti(true); setEnd(addDays(start, 1)); }}>{t('event.multiDay')}</button>
           </div>
         )}
       </div>
 
       {!allDay && (
         <div className="grid2">
-          <label className="field"><span>Empieza</span>
+          <label className="field"><span>{t('event.starts')}</span>
             <input type="time" value={startTime} onChange={(e) => onStartTime(e.target.value)} />
           </label>
-          <label className="field"><span>Termina</span>
+          <label className="field"><span>{t('event.ends')}</span>
             <input type="time" value={endTime} onChange={(e) => setEndTime(e.target.value)} />
           </label>
         </div>
       )}
 
       <div className="grid2">
-        <label className="field"><span>Repetir</span>
+        <label className="field"><span>{t('event.repeat')}</span>
           <select value={repeat} onChange={(e) => setRepeat(e.target.value as RepeatSel)}>
-            <option value="none">No se repite</option>
-            <option value="daily">Cada día</option>
-            <option value="weekly">Cada semana</option>
-            <option value="monthly">Cada mes</option>
-            <option value="yearly">Cada año</option>
+            <option value="none">{t('repeat.none')}</option>
+            <option value="daily">{t('repeat.daily')}</option>
+            <option value="weekly">{t('repeat.weekly')}</option>
+            <option value="monthly">{t('repeat.monthly')}</option>
+            <option value="yearly">{t('repeat.yearly')}</option>
           </select>
         </label>
-        <label className="field"><span>Aviso</span>
+        <label className="field"><span>{t('event.reminder')}</span>
           <select value={reminder ?? ''} onChange={(e) => setReminder(e.target.value === '' ? null : Number(e.target.value))}>
-            {reminders.map(([v, l]) => <option key={l} value={v ?? ''}>{l}</option>)}
+            {reminders.map(([v, l]) => <option key={l} value={v ?? ''}>{t(l)}</option>)}
           </select>
         </label>
       </div>
@@ -187,7 +192,7 @@ export function EventEditor({ event, date, occurrence, onClose }: {
         <div className="card flat stack" style={{ padding: 12, gap: 12, background: 'var(--surface-2)' }}>
           {repeat === 'weekly' && (
             <div className="weekdays">
-              {DOW_LETTER.map((l, i) => (
+              {dowLetter().map((l, i) => (
                 <button key={i} type="button" className={byWeekday.includes(i) ? 'on' : ''}
                   onClick={() => setByWeekday(byWeekday.includes(i) ? byWeekday.filter((x) => x !== i) : [...byWeekday, i])}>
                   {l}
@@ -196,29 +201,26 @@ export function EventEditor({ event, date, occurrence, onClose }: {
             </div>
           )}
           <div className="grid2">
-            <label className="field"><span>Cada</span>
+            <label className="field"><span>{t('repeat.every')}</span>
               <select value={every} onChange={(e) => setEvery(Number(e.target.value))}>
                 {[1, 2, 3, 4].map((n) => (
-                  <option key={n} value={n}>
-                    {n === 1 ? { daily: 'día', weekly: 'semana', monthly: 'mes', yearly: 'año' }[repeat]
-                      : `${n} ${{ daily: 'días', weekly: 'semanas', monthly: 'meses', yearly: 'años' }[repeat]}`}
-                  </option>
+                  <option key={n} value={n}>{tn(UNIT_KEY[repeat], n)}</option>
                 ))}
               </select>
             </label>
-            <label className="field"><span>Hasta (opcional)</span>
+            <label className="field"><span>{t('repeat.until')}</span>
               <input type="date" value={until} min={start} onChange={(e) => setUntil(e.target.value)} />
             </label>
           </div>
-          {event?.recurrence && <p className="tiny muted">Los cambios se aplican a todas las repeticiones.</p>}
+          {event?.recurrence && <p className="tiny muted">{t('event.changesAllOccurrences')}</p>}
         </div>
       )}
 
-      <label className="field"><span>Lugar</span>
-        <input value={location} onChange={(e) => setLocation(e.target.value)} placeholder="Opcional" />
+      <label className="field"><span>{t('event.location')}</span>
+        <input value={location} onChange={(e) => setLocation(e.target.value)} placeholder={t('common.optional')} />
       </label>
-      <label className="field"><span>Notas</span>
-        <textarea value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Opcional" />
+      <label className="field"><span>{t('common.notes')}</span>
+        <textarea value={notes} onChange={(e) => setNotes(e.target.value)} placeholder={t('common.optional')} />
       </label>
     </Sheet>
   );

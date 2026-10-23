@@ -2,16 +2,17 @@ import { useRef, useState, type PointerEvent } from 'react';
 import { GripVertical, RotateCcw } from 'lucide-react';
 import { DEFAULT_ORDER, useDashboardLayout, widgetMeta, type WidgetId } from '../lib/dashboard';
 import { Sheet } from './ui';
+import { t } from '../i18n';
 
 interface Drag {
   id: WidgetId;
   from: number;
   startY: number;
   height: number;
-  centers: number[]; // centro de cada fila al empezar a arrastrar
+  centers: number[]; // center of each row when the drag started
 }
 
-/** Hoja para elegir qué tarjetas salen en el inicio y en qué orden. */
+/** Sheet to choose which cards appear on the home screen and in what order. */
 export function DashboardEditor({ onClose }: { onClose: () => void }) {
   const layout = useDashboardLayout();
   const [order, setOrder] = useState<WidgetId[]>(layout.order);
@@ -20,8 +21,8 @@ export function DashboardEditor({ onClose }: { onClose: () => void }) {
   const [dy, setDy] = useState(0);
   const rows = useRef(new Map<WidgetId, HTMLElement>());
 
-  // Mientras se arrastra no se reordena el DOM: se desplazan las filas con
-  // transform y el orden real se aplica al soltar (así no se pierde el puntero).
+  // While dragging, the DOM isn't reordered: rows are shifted with transforms and
+  // the real order is applied on drop (so the pointer capture isn't lost).
   const target = drag ? targetIndex(drag, dy) : -1;
 
   const onDown = (e: PointerEvent, id: WidgetId) => {
@@ -72,15 +73,15 @@ export function DashboardEditor({ onClose }: { onClose: () => void }) {
 
   return (
     <Sheet
-      title="Personalizar inicio"
+      title={t('dash.customize')}
       onClose={onClose}
       footer={<>
-        <button className="btn ghost" style={{ flex: 'none' }} onClick={reset}><RotateCcw size={17} /> Restablecer</button>
-        <button className="btn accent" onClick={onClose}>Hecho</button>
+        <button className="btn ghost" style={{ flex: 'none' }} onClick={reset}><RotateCcw size={17} /> {t('dash.reset')}</button>
+        <button className="btn accent" onClick={onClose}>{t('common.done')}</button>
       </>}
     >
       <p className="small muted" style={{ marginTop: -4 }}>
-        Arrastra <GripVertical size={14} style={{ verticalAlign: -2 }} /> para ordenar y usa el interruptor para mostrar u ocultar. Es solo para ti: tu pareja tiene su propio inicio.
+        {t('dash.help1')} <GripVertical size={14} style={{ verticalAlign: -2 }} /> {t('dash.help2')}
       </p>
       <div className="list dash-editor">
         {order.map((id, i) => {
@@ -99,7 +100,7 @@ export function DashboardEditor({ onClose }: { onClose: () => void }) {
             >
               <button
                 className="drag-handle"
-                aria-label={`Mover ${m.label}`}
+                aria-label={t('dash.move', { name: t(m.label) })}
                 onPointerDown={(e) => onDown(e, id)}
                 onPointerMove={onMove}
                 onPointerUp={onUp}
@@ -109,11 +110,11 @@ export function DashboardEditor({ onClose }: { onClose: () => void }) {
               </button>
               <span className="dash-editor-ic"><m.icon size={18} /></span>
               <div className="grow" style={{ minWidth: 0 }}>
-                <div className="item-title">{m.label}</div>
-                <div className="item-sub ellipsis">{m.sub}</div>
+                <div className="item-title">{t(m.label)}</div>
+                <div className="item-sub ellipsis">{t(m.sub)}</div>
               </div>
               <label className="switch" style={{ minHeight: 0 }}>
-                <input type="checkbox" checked={visible} onChange={(e) => toggle(id, e.target.checked)} aria-label={`Mostrar ${m.label}`} />
+                <input type="checkbox" checked={visible} onChange={(e) => toggle(id, e.target.checked)} aria-label={t('dash.show', { name: t(m.label) })} />
               </label>
             </div>
           );
@@ -123,7 +124,7 @@ export function DashboardEditor({ onClose }: { onClose: () => void }) {
   );
 }
 
-/** Posición en la que caería la fila arrastrada según su centro actual. */
+/** Index where the dragged row would land, from its current center. */
 function targetIndex(d: Drag, dy: number) {
   const center = d.centers[d.from] + dy;
   let to = d.from;

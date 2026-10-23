@@ -1,6 +1,9 @@
-// Modelo de datos compartido entre la app y el notificador.
-// Todas las fechas son cadenas locales 'YYYY-MM-DD' y las horas 'HH:mm'
-// en la zona horaria de la casa (evita líos con cambios de hora).
+// Data model shared by the app and the notifier.
+// All dates are local 'YYYY-MM-DD' strings and times are 'HH:mm', in the
+// household's time zone (avoids trouble with daylight-saving changes).
+
+/** UI / notification language. */
+export type Lang = 'es' | 'en';
 
 export type MemberKind = 'adult' | 'child';
 
@@ -9,7 +12,7 @@ export interface Member {
   name: string;
   color: string;
   kind: MemberKind;
-  uid?: string | null; // cuenta vinculada (solo adultos)
+  uid?: string | null; // linked account (adults only)
 }
 
 export interface Household {
@@ -25,8 +28,8 @@ export interface Household {
 
 export interface NotifySettings {
   dailySummary: boolean;
-  dailyHour: number; // hora local del resumen diario
-  activity: boolean; // "X ha añadido leche a la compra"
+  dailyHour: number; // local hour of the daily summary
+  activity: boolean; // "X added milk to the shopping list"
 }
 
 export type Freq = 'daily' | 'weekly' | 'monthly' | 'yearly';
@@ -34,7 +37,7 @@ export type Freq = 'daily' | 'weekly' | 'monthly' | 'yearly';
 export interface Recurrence {
   freq: Freq;
   interval: number;
-  byWeekday?: number[]; // 0 = lunes … 6 = domingo
+  byWeekday?: number[]; // 0 = Monday … 6 = Sunday
   until?: string | null;
 }
 
@@ -42,13 +45,13 @@ export interface CalEvent {
   id: string;
   title: string;
   date: string;
-  endDate?: string | null; // inclusivo, para eventos de varios días
-  startTime?: string | null; // null => todo el día
+  endDate?: string | null; // inclusive, for multi-day events
+  startTime?: string | null; // null => all day
   endTime?: string | null;
   memberIds: string[];
   recurrence?: Recurrence | null;
   exdates?: string[];
-  reminderMins?: number | null; // minutos antes (todo el día: relativo a las 09:00)
+  reminderMins?: number | null; // minutes before (all-day events: relative to 09:00)
   location?: string;
   notes?: string;
   createdBy?: string;
@@ -91,20 +94,20 @@ export interface KeyDate {
   id: string;
   title: string;
   kind: KeyDateKind;
-  date: string; // en cumpleaños, la fecha de nacimiento
+  date: string; // for birthdays, the date of birth
   repeat: 'none' | 'monthly' | 'yearly';
   remindDays: number;
   memberIds?: string[];
-  amount?: number | null; // céntimos
+  amount?: number | null; // cents
   notes?: string;
 }
 
 export interface Expense {
   id: string;
   description: string;
-  amount: number; // céntimos
+  amount: number; // cents
   paidBy: string; // member id
-  splitAmong: string[]; // member ids (en 'settle', el que recibe)
+  splitAmong: string[]; // member ids (for 'settle', the one who receives)
   date: string;
   category: string;
   kind: 'expense' | 'settle';
@@ -128,6 +131,8 @@ export interface Device {
   subscription: { endpoint: string; keys: { p256dh: string; auth: string } };
   ua: string;
   createdAt: number;
+  /** Language for this device's notifications (missing or unknown ⇒ 'es'). */
+  lang?: Lang;
 }
 
 export type ActivityKind = 'shopping' | 'event' | 'task' | 'note' | 'expense' | 'date' | 'menu';
@@ -137,7 +142,7 @@ export interface Activity {
   actorUid: string;
   actorName: string;
   kind: ActivityKind;
-  text: string; // p. ej. "leche"
+  text: string; // e.g. "milk"
   createdAt: number;
   notified: boolean;
 }

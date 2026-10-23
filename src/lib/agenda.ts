@@ -3,6 +3,7 @@ import { useApp, useCollection } from './app';
 import { addDays, diffDays, parts, zonedToUtc, type DateStr } from '../shared/dates';
 import { expandEvents, keyDateOccurrences, occursOn, type Occurrence } from '../shared/recurrence';
 import type { CalEvent, KeyDate, MenuDay } from '../shared/types';
+import { t } from '../i18n';
 
 export interface DayAgenda {
   date: DateStr;
@@ -19,7 +20,7 @@ export function useCalendarData() {
   return { events, keyDates, menu, loading: !events };
 }
 
-/** Agenda día a día entre from y to (inclusive). */
+/** Day-by-day agenda between from and to (inclusive). */
 export function useAgenda(from: DateStr, to: DateStr, memberFilter?: string[] | null) {
   const { events, keyDates, menu } = useCalendarData();
   return useMemo(() => {
@@ -52,7 +53,7 @@ export function useAgenda(from: DateStr, to: DateStr, memberFilter?: string[] | 
 
 export interface NextUp { occ: Occurrence; start: number; end: number }
 
-/** Próximo evento con hora (o en curso) a partir de ahora. */
+/** Next timed event (or the one in progress) from now on. */
 export function useNextUp(now: number, today: DateStr): NextUp | null {
   const { tz } = useApp();
   const { events } = useCalendarData();
@@ -63,7 +64,7 @@ export function useNextUp(now: number, today: DateStr): NextUp | null {
       if (!o.event.startTime) continue;
       const start = zonedToUtc(o.date, o.event.startTime, tz);
       let end = o.event.endTime ? zonedToUtc(o.endDate, o.event.endTime, tz) : start + 3600_000;
-      if (end <= start) end += 86400_000; // termina al día siguiente (turnos de noche)
+      if (end <= start) end += 86400_000; // ends the next day (night shifts)
       if (end <= now) continue;
       if (!best || start < best.start) best = { occ: o, start, end };
     }
@@ -75,11 +76,11 @@ export function keyDateEmoji(kind: KeyDate['kind']) {
   return { birthday: '🎂', car: '🚗', insurance: '🛡️', bill: '🧾', health: '🩺', school: '🎒', other: '📌' }[kind] ?? '📌';
 }
 
-/** "Lía (3)" para cumpleaños, el título en el resto. */
+/** "Lía turns 3" for birthdays, the plain title otherwise. */
 export function keyDateLabel(kd: KeyDate, on: DateStr) {
   if (kd.kind !== 'birthday') return kd.title;
   const age = parts(on).y - parts(kd.date).y;
-  return age > 0 && age < 120 ? `${kd.title} cumple ${age}` : `Cumple ${kd.title}`;
+  return age > 0 && age < 120 ? t('dates.turnsAge', { name: kd.title, age }) : t('dates.birthdayOf', { name: kd.title });
 }
 
 export function daysUntil(d: DateStr, today: DateStr) {

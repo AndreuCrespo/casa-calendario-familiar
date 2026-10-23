@@ -1,4 +1,4 @@
-// Expansión de eventos repetidos, fechas clave y tareas periódicas.
+// Expansion of recurring events, key dates and periodic tasks.
 import {
   type DateStr, addDays, addMonthsClamped, diffDays, maxDate, parts, startOfWeek, weekday, ymd, daysInMonth,
 } from './dates';
@@ -7,8 +7,8 @@ import type { CalEvent, KeyDate, Recurrence, Task } from './types';
 const MAX_ITER = 5000;
 
 /**
- * Fechas de inicio de las repeticiones cuyo intervalo [inicio, inicio+duración]
- * se solapa con [from, to] (ambos inclusive).
+ * Start dates of the occurrences whose span [start, start+duration] overlaps
+ * [from, to] (both inclusive).
  */
 export function occurrenceStarts(
   start: DateStr,
@@ -18,7 +18,7 @@ export function occurrenceStarts(
   to: DateStr,
   exdates: string[] = [],
 ): DateStr[] {
-  const lo = addDays(from, -durationDays); // primer inicio que aún pisa el rango
+  const lo = addDays(from, -durationDays); // earliest start that still overlaps the range
   const out: DateStr[] = [];
   const push = (s: DateStr) => {
     if (s >= start && s >= lo && s <= to && !exdates.includes(s)) out.push(s);
@@ -48,7 +48,7 @@ export function occurrenceStarts(
       const week0 = startOfWeek(start);
       const weeksFirst = Math.floor(diffDays(startOfWeek(first), week0) / 7);
       let w = Math.max(0, Math.ceil(weeksFirst / interval) * interval);
-      if (w > weeksFirst) w = Math.max(0, w - interval); // la semana anterior puede pisar el rango
+      if (w > weeksFirst) w = Math.max(0, w - interval); // the previous week may overlap the range
       for (let n = 0; n < MAX_ITER; n++, w += interval) {
         const ws = addDays(week0, w * 7);
         if (ws > until) break;
@@ -88,7 +88,7 @@ export function occurrenceStarts(
 export interface Occurrence {
   key: string;
   event: CalEvent;
-  date: DateStr; // inicio de esta repetición
+  date: DateStr; // start of this occurrence
   endDate: DateStr;
 }
 
@@ -115,7 +115,7 @@ export function compareOcc(a: Occurrence, b: Occurrence) {
   return a.event.title.localeCompare(b.event.title);
 }
 
-/** ¿La repetición cubre el día d? */
+/** Does the occurrence cover day d? */
 export function occursOn(o: Occurrence, d: DateStr) {
   return o.date <= d && o.endDate >= d;
 }
@@ -130,9 +130,9 @@ export function keyDateOccurrences(kd: KeyDate, from: DateStr, to: DateStr): Dat
   return occurrenceStarts(kd.date, 0, keyDateRecurrence(kd), from, to);
 }
 
-/** Próxima fecha (>= hoy) de una fecha clave, o null si ya pasó. */
+/** Next date (>= today) of a key date, or null if it has passed. */
 export function nextKeyDate(kd: KeyDate, today: DateStr): DateStr | null {
-  // El horizonte cuenta desde la primera fecha posible (puede estar a años vista).
+  // The horizon counts from the earliest possible date (may be years ahead).
   const base = maxDate(today, kd.date);
   const horizon = kd.repeat === 'monthly' ? addDays(base, 40) : addDays(base, 400);
   return keyDateOccurrences(kd, today, horizon)[0] ?? null;
@@ -144,7 +144,7 @@ function addRepeat(d: DateStr, every: number, unit: 'day' | 'week' | 'month'): D
   return addMonthsClamped(d, every);
 }
 
-/** Siguiente vencimiento de una tarea periódica al marcarla como hecha. */
+/** Next due date of a periodic task when it's marked as done. */
 export function nextTaskDue(task: Task, today: DateStr): DateStr | null {
   if (!task.repeat) return null;
   const { every, unit } = task.repeat;

@@ -1,19 +1,27 @@
 import type { Expense, Member } from '../shared/types';
+import type { MessageKey } from '../i18n';
 
-export const CATEGORIES: { id: string; label: string; emoji: string; color: string }[] = [
-  { id: 'super', label: 'Súper', emoji: '🛒', color: '#22A06B' },
-  { id: 'casa', label: 'Casa', emoji: '🏠', color: '#4C7DF0' },
-  { id: 'facturas', label: 'Facturas', emoji: '💡', color: '#F08C2E' },
-  { id: 'ninas', label: 'Peques', emoji: '🧸', color: '#8B5CF6' },
-  { id: 'coche', label: 'Coche', emoji: '🚗', color: '#14A3B8' },
-  { id: 'salud', label: 'Salud', emoji: '🩺', color: '#E2558A' },
-  { id: 'ocio', label: 'Ocio', emoji: '🎉', color: '#D9483B' },
-  { id: 'otros', label: 'Otros', emoji: '📦', color: '#968D81' },
+export const CATEGORIES: { id: string; label: MessageKey; emoji: string; color: string }[] = [
+  { id: 'groceries', label: 'cat.groceries', emoji: '🛒', color: '#22A06B' },
+  { id: 'home', label: 'cat.home', emoji: '🏠', color: '#4C7DF0' },
+  { id: 'bills', label: 'cat.bills', emoji: '💡', color: '#F08C2E' },
+  { id: 'kids', label: 'cat.kids', emoji: '🧸', color: '#8B5CF6' },
+  { id: 'car', label: 'cat.car', emoji: '🚗', color: '#14A3B8' },
+  { id: 'health', label: 'cat.health', emoji: '🩺', color: '#E2558A' },
+  { id: 'leisure', label: 'cat.leisure', emoji: '🎉', color: '#D9483B' },
+  { id: 'other', label: 'cat.other', emoji: '📦', color: '#968D81' },
 ];
 
-export const category = (id: string) => CATEGORIES.find((c) => c.id === id) ?? CATEGORIES[CATEGORIES.length - 1];
+/** Category ids used by earlier versions (still found in stored expenses). */
+const LEGACY_CATEGORY: Record<string, string> = {
+  super: 'groceries', casa: 'home', facturas: 'bills', ninas: 'kids',
+  coche: 'car', salud: 'health', ocio: 'leisure', otros: 'other',
+};
 
-/** Saldo neto por miembro (positivo = le deben). */
+export const categoryId = (id: string) => LEGACY_CATEGORY[id] ?? id;
+export const category = (id: string) => CATEGORIES.find((c) => c.id === categoryId(id)) ?? CATEGORIES[CATEGORIES.length - 1];
+
+/** Net balance per member (positive = they are owed money). */
 export function balances(expenses: Expense[]) {
   const net = new Map<string, number>();
   const add = (id: string, v: number) => net.set(id, (net.get(id) ?? 0) + v);
@@ -35,7 +43,7 @@ export function balances(expenses: Expense[]) {
   return net;
 }
 
-/** Deudas simplificadas: quién paga a quién. */
+/** Simplified debts: who pays whom. */
 export function settlements(expenses: Expense[], members: Member[]) {
   const net = balances(expenses);
   const debtors = members.map((m) => ({ m, v: net.get(m.id) ?? 0 })).filter((x) => x.v < 0).sort((a, b) => a.v - b.v);

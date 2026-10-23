@@ -3,6 +3,7 @@ import { Plus, ShoppingCart, Trash2, X } from 'lucide-react';
 import { useApp, useCollection } from '../lib/app';
 import type { ShoppingItem } from '../shared/types';
 import { CheckCircle, Empty, PageHead, toast } from '../components/ui';
+import { t, tn } from '../i18n';
 
 interface ShoppingMeta { id: string; freq?: Record<string, number> }
 
@@ -29,7 +30,7 @@ export default function Shopping() {
   }, [freq, pending]);
 
   const add = (raw: string) => {
-    // Permite añadir varias cosas separadas por comas: "leche, pan, huevos"
+    // Several items can be added at once, comma-separated: "milk, bread, eggs"
     const names = raw.split(/[,\n]/).map((s) => s.trim()).filter(Boolean);
     if (!names.length) return;
     const existing = new Map((items ?? []).map((i) => [norm(i.name), i]));
@@ -55,22 +56,22 @@ export default function Shopping() {
   const clearDone = () => {
     const ids = done.map((i) => i.id);
     ids.forEach((id) => backend.remove('shopping', id));
-    toast(`${ids.length} ${ids.length === 1 ? 'cosa borrada' : 'cosas borradas'}`);
+    toast(tn('shopping.cleared', ids.length));
   };
 
   return (
     <>
-      <PageHead title="Compra" sub={pending.length ? `${pending.length} ${pending.length === 1 ? 'cosa' : 'cosas'} por comprar` : 'Todo comprado'} />
+      <PageHead title={t('nav.shopping')} sub={pending.length ? tn('shopping.toBuy', pending.length) : t('shopping.allBought')} />
 
       <form className="add-bar" onSubmit={(e) => { e.preventDefault(); add(text); }}>
         <input
           className="input grow"
-          placeholder="Añadir… (puedes separar con comas)"
+          placeholder={t('shopping.addPlaceholder')}
           value={text}
           onChange={(e) => setText(e.target.value)}
           enterKeyHint="done"
         />
-        <button className="btn accent" style={{ width: 50, padding: 0 }} aria-label="Añadir"><Plus size={22} /></button>
+        <button className="btn accent" style={{ width: 50, padding: 0 }} aria-label={t('common.add')}><Plus size={22} /></button>
       </form>
 
       {suggestions.length > 0 && (
@@ -82,7 +83,7 @@ export default function Shopping() {
       )}
 
       {items && pending.length === 0 && (
-        <Empty icon={ShoppingCart} title="La lista está vacía">Añade lo que haga falta y le llegará al otro móvil al momento.</Empty>
+        <Empty icon={ShoppingCart} title={t('shopping.emptyTitle')}>{t('shopping.emptyText')}</Empty>
       )}
 
       {pending.length > 0 && (
@@ -93,8 +94,8 @@ export default function Shopping() {
               <div key={i.id} className="list-item">
                 <CheckCircle on={false} onClick={() => toggle(i)} />
                 <div className="grow item-title" onClick={() => toggle(i)} style={{ cursor: 'pointer' }}>{i.name}</div>
-                {by && <span className="dot" style={{ background: by.color }} title={`Añadido por ${by.name}`} />}
-                <button className="icon-btn sm" onClick={() => backend.remove('shopping', i.id)} aria-label="Quitar"><X size={17} /></button>
+                {by && <span className="dot" style={{ background: by.color }} title={t('shopping.addedBy', { name: by.name })} />}
+                <button className="icon-btn sm" onClick={() => backend.remove('shopping', i.id)} aria-label={t('common.remove')}><X size={17} /></button>
               </div>
             );
           })}
@@ -105,10 +106,10 @@ export default function Shopping() {
         <>
           <div className="section-title">
             <button onClick={() => setShowDone(!showDone)} style={{ font: 'inherit', color: 'inherit', letterSpacing: 'inherit' }}>
-              {showDone ? '▾' : '▸'} En el carro ({done.length})
+              {showDone ? '▾' : '▸'} {t('shopping.inCart', { n: done.length })}
             </button>
             <div className="grow" />
-            <button className="btn ghost sm" onClick={clearDone}><Trash2 size={15} /> Vaciar</button>
+            <button className="btn ghost sm" onClick={clearDone}><Trash2 size={15} /> {t('shopping.clear')}</button>
           </div>
           {showDone && (
             <div className="list">

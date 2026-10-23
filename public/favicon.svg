@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
-  <!-- Nido: cuatro huevos con los colores de la familia (dos grandes y dos pequeños) -->
+  <!-- Nest: four eggs in the family members' colours (two big, two small) -->
   <rect width="100" height="100" rx="22" fill="#FAEBD0"/>
   <g transform="translate(0 -4)">
     <ellipse cx="38" cy="48" rx="10" ry="13" fill="#4C7DF0"/>

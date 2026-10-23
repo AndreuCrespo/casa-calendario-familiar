@@ -1,5 +1,6 @@
-// Previsión de Open-Meteo (gratis, sin clave).
+// Open-Meteo forecast (free, no API key).
 import { useApp } from './app';
+import { getLang, t } from '../i18n';
 import { useRemote } from './remote';
 
 export interface Weather {
@@ -60,7 +61,7 @@ export function useWeather() {
 export interface GeoResult { name: string; admin1?: string; country?: string; lat: number; lon: number }
 
 export async function searchPlaces(name: string): Promise<GeoResult[]> {
-  const q = new URLSearchParams({ name, count: '6', language: 'es', format: 'json' });
+  const q = new URLSearchParams({ name, count: '6', language: getLang(), format: 'json' });
   const r = await fetch(`https://geocoding-api.open-meteo.com/v1/search?${q}`);
   const j = await r.json();
   return (j.results ?? []).map((x: { name: string; admin1?: string; country?: string; latitude: number; longitude: number }) => ({
@@ -68,19 +69,19 @@ export async function searchPlaces(name: string): Promise<GeoResult[]> {
   }));
 }
 
-/** Descripción en castellano de los códigos WMO. */
+/** Human description of a WMO weather code. */
 export function weatherLabel(code: number): string {
-  if (code === 0) return 'Despejado';
-  if (code === 1) return 'Casi despejado';
-  if (code === 2) return 'Parcialmente nuboso';
-  if (code === 3) return 'Nublado';
-  if (code === 45 || code === 48) return 'Niebla';
-  if (code >= 51 && code <= 57) return 'Llovizna';
-  if (code >= 61 && code <= 67) return 'Lluvia';
-  if (code >= 71 && code <= 77) return 'Nieve';
-  if (code >= 80 && code <= 82) return 'Chubascos';
-  if (code === 85 || code === 86) return 'Chubascos de nieve';
-  if (code >= 95) return 'Tormenta';
+  if (code === 0) return t('wx.clear');
+  if (code === 1) return t('wx.mostlyClear');
+  if (code === 2) return t('wx.partlyCloudy');
+  if (code === 3) return t('wx.cloudy');
+  if (code === 45 || code === 48) return t('wx.fog');
+  if (code >= 51 && code <= 57) return t('wx.drizzle');
+  if (code >= 61 && code <= 67) return t('wx.rain');
+  if (code >= 71 && code <= 77) return t('wx.snow');
+  if (code >= 80 && code <= 82) return t('wx.showers');
+  if (code === 85 || code === 86) return t('wx.snowShowers');
+  if (code >= 95) return t('wx.storm');
   return '—';
 }
 
@@ -97,7 +98,7 @@ export function weatherKind(code: number): WeatherKind {
   return 'storm';
 }
 
-/** Índice de la previsión diaria para una fecha, o -1. */
+/** Index of a date in the daily forecast, or -1. */
 export function dayIndex(w: Weather | undefined, date: string) {
   return w ? w.daily.date.indexOf(date) : -1;
 }

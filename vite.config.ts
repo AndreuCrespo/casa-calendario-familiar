@@ -2,8 +2,8 @@ import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
 
-// En WSL, los cambios hechos desde Windows en /mnt/... no generan eventos de
-// inotify: hay que vigilar los archivos por sondeo.
+// Under WSL, edits made from Windows to /mnt/... don't fire inotify events,
+// so files have to be watched by polling.
 const wslOnWindowsDrive = !!process.env.WSL_DISTRO_NAME && process.cwd().startsWith('/mnt/');
 
 export default defineConfig({
@@ -25,7 +25,7 @@ export default defineConfig({
       manifest: {
         name: 'Casa',
         short_name: 'Casa',
-        description: 'Calendario y cosas de casa, compartido',
+        description: 'Calendario familiar y cosas de casa · Family calendar and household organizer',
         lang: 'es',
         start_url: '/',
         scope: '/',

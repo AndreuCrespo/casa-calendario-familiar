@@ -2,20 +2,21 @@ import { useMemo, useState } from 'react';
 import { CalendarClock, Plus, Trash2 } from 'lucide-react';
 import { useApp, useCollection, useToday } from '../lib/app';
 import { keyDateEmoji, keyDateLabel } from '../lib/agenda';
-import { dayShort, euros, inDays, parseEuros } from '../lib/format';
+import { centsToInput, dayShort, euros, inDays, parseEuros } from '../lib/format';
 import { diffDays } from '../shared/dates';
 import { nextKeyDate } from '../shared/recurrence';
 import type { KeyDate, KeyDateKind } from '../shared/types';
 import { Empty, MemberPicker, PageHead, Sheet, toast } from '../components/ui';
+import { t, tn, type MessageKey } from '../i18n';
 
-const KINDS: { id: KeyDateKind; label: string }[] = [
-  { id: 'birthday', label: 'Cumpleaños' },
-  { id: 'car', label: 'Coche (ITV, revisión…)' },
-  { id: 'insurance', label: 'Seguro' },
-  { id: 'bill', label: 'Recibo / factura' },
-  { id: 'health', label: 'Salud (vacunas, revisiones…)' },
-  { id: 'school', label: 'Cole / guardería' },
-  { id: 'other', label: 'Otro' },
+const KINDS: { id: KeyDateKind; label: MessageKey }[] = [
+  { id: 'birthday', label: 'kind.birthday' },
+  { id: 'car', label: 'kind.car' },
+  { id: 'insurance', label: 'kind.insurance' },
+  { id: 'bill', label: 'kind.bill' },
+  { id: 'health', label: 'kind.health' },
+  { id: 'school', label: 'kind.school' },
+  { id: 'other', label: 'kind.other' },
 ];
 
 export default function KeyDates() {
@@ -39,9 +40,9 @@ export default function KeyDates() {
         <div className="grow" style={{ minWidth: 0 }}>
           <div className="item-title ellipsis">{next ? keyDateLabel(kd, next) : kd.title}</div>
           <div className="item-sub">
-            {next ? dayShort(next) : `Pasó el ${dayShort(kd.date)}`}
-            {kd.repeat === 'yearly' && ' · cada año'}
-            {kd.repeat === 'monthly' && ' · cada mes'}
+            {next ? dayShort(next) : t('dates.passedOn', { day: dayShort(kd.date) })}
+            {kd.repeat === 'yearly' && ` · ${t('dates.everyYear')}`}
+            {kd.repeat === 'monthly' && ` · ${t('dates.everyMonth')}`}
             {kd.amount ? ` · ${euros(kd.amount)}` : ''}
           </div>
         </div>
@@ -52,18 +53,18 @@ export default function KeyDates() {
 
   return (
     <>
-      <PageHead title="Fechas" sub="Cumpleaños, vencimientos y recibos" />
+      <PageHead title={t('nav.dates')} sub={t('dates.subtitle')} />
       {dates && dates.length === 0 && (
-        <Empty icon={CalendarClock} title="Sin fechas todavía">Apunta cumpleaños, la ITV, el seguro… y os avisará unos días antes.</Empty>
+        <Empty icon={CalendarClock} title={t('dates.emptyTitle')}>{t('dates.emptyText')}</Empty>
       )}
       {upcoming.length > 0 && <div className="list">{upcoming.map((x) => <Row key={x.kd.id} {...x} />)}</div>}
       {past.length > 0 && (
         <>
-          <div className="section-title">Ya pasadas</div>
+          <div className="section-title">{t('dates.past')}</div>
           <div className="list">{past.map((x) => <Row key={x.kd.id} {...x} />)}</div>
         </>
       )}
-      <button className="fab" onClick={() => setEditing('new')} aria-label="Nueva fecha"><Plus size={28} /></button>
+      <button className="fab" onClick={() => setEditing('new')} aria-label={t('dates.new')}><Plus size={28} /></button>
       {editing && <KeyDateEditor kd={editing === 'new' ? undefined : editing} onClose={() => setEditing(null)} />}
     </>
   );
@@ -77,7 +78,7 @@ function KeyDateEditor({ kd, onClose }: { kd?: KeyDate; onClose: () => void }) {
   const [date, setDate] = useState(kd?.date ?? today);
   const [repeat, setRepeat] = useState<KeyDate['repeat']>(kd?.repeat ?? 'none');
   const [remindDays, setRemindDays] = useState(kd?.remindDays ?? 7);
-  const [amount, setAmount] = useState(kd?.amount ? (kd.amount / 100).toFixed(2).replace('.', ',') : '');
+  const [amount, setAmount] = useState(kd?.amount ? centsToInput(kd.amount) : '');
   const [memberIds, setMemberIds] = useState<string[]>(kd?.memberIds ?? []);
   const [notes, setNotes] = useState(kd?.notes ?? '');
 
@@ -90,7 +91,7 @@ function KeyDateEditor({ kd, onClose }: { kd?: KeyDate; onClose: () => void }) {
   };
 
   const save = () => {
-    if (!title.trim()) { toast('Ponle un nombre'); return; }
+    if (!title.trim()) { toast(t('dates.needName')); return; }
     const data = {
       title: title.trim(), kind, date, repeat, remindDays,
       amount: parseEuros(amount), memberIds, notes: notes.trim(),
@@ -102,52 +103,52 @@ function KeyDateEditor({ kd, onClose }: { kd?: KeyDate; onClose: () => void }) {
 
   return (
     <Sheet
-      title={kd ? 'Editar fecha' : 'Nueva fecha'}
+      title={kd ? t('dates.edit') : t('dates.new')}
       onClose={onClose}
       footer={<>
-        {kd && <button className="btn danger" style={{ flex: 'none' }} onClick={() => { backend.remove('dates', kd.id); onClose(); }} aria-label="Borrar"><Trash2 size={20} /></button>}
-        <button className="btn accent" onClick={save}>Guardar</button>
+        {kd && <button className="btn danger" style={{ flex: 'none' }} onClick={() => { backend.remove('dates', kd.id); onClose(); }} aria-label={t('common.delete')}><Trash2 size={20} /></button>}
+        <button className="btn accent" onClick={save}>{t('common.save')}</button>
       </>}
     >
-      <label className="field"><span>Tipo</span>
+      <label className="field"><span>{t('dates.type')}</span>
         <select value={kind} onChange={(e) => onKind(e.target.value as KeyDateKind)}>
-          {KINDS.map((k) => <option key={k.id} value={k.id}>{keyDateEmoji(k.id)} {k.label}</option>)}
+          {KINDS.map((k) => <option key={k.id} value={k.id}>{keyDateEmoji(k.id)} {t(k.label)}</option>)}
         </select>
       </label>
-      <label className="field"><span>{kind === 'birthday' ? '¿De quién?' : 'Nombre'}</span>
-        <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder={kind === 'birthday' ? 'Nombre' : 'Ej: ITV coche'} autoFocus={!kd} />
+      <label className="field"><span>{kind === 'birthday' ? t('dates.whose') : t('dates.name')}</span>
+        <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder={kind === 'birthday' ? t('dates.name') : t('dates.namePlaceholder')} autoFocus={!kd} />
       </label>
       <div className="grid2">
-        <label className="field"><span>{kind === 'birthday' ? 'Fecha de nacimiento' : 'Fecha'}</span>
+        <label className="field"><span>{kind === 'birthday' ? t('dates.birthDate') : t('dates.date')}</span>
           <input type="date" value={date} onChange={(e) => e.target.value && setDate(e.target.value)} />
         </label>
-        <label className="field"><span>Se repite</span>
+        <label className="field"><span>{t('dates.repeats')}</span>
           <select value={repeat} onChange={(e) => setRepeat(e.target.value as KeyDate['repeat'])}>
-            <option value="none">No</option>
-            <option value="monthly">Cada mes</option>
-            <option value="yearly">Cada año</option>
+            <option value="none">{t('common.no')}</option>
+            <option value="monthly">{t('repeat.monthly')}</option>
+            <option value="yearly">{t('repeat.yearly')}</option>
           </select>
         </label>
       </div>
       <div className="grid2">
-        <label className="field"><span>Avisar</span>
+        <label className="field"><span>{t('dates.remind')}</span>
           <select value={remindDays} onChange={(e) => setRemindDays(Number(e.target.value))}>
             {[0, 1, 2, 3, 7, 15, 30, 60].map((n) => (
-              <option key={n} value={n}>{n === 0 ? 'Ese mismo día' : n === 1 ? '1 día antes' : `${n} días antes`}</option>
+              <option key={n} value={n}>{n === 0 ? t('dates.sameDay') : tn('dates.daysBefore', n)}</option>
             ))}
           </select>
         </label>
         {kind !== 'birthday' && (
-          <label className="field"><span>Importe</span>
-            <input inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="Opcional (€)" />
+          <label className="field"><span>{t('dates.amount')}</span>
+            <input inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder={t('dates.amountPlaceholder')} />
           </label>
         )}
       </div>
-      <div className="field"><span>Relacionado con</span>
+      <div className="field"><span>{t('dates.relatedTo')}</span>
         <MemberPicker members={members} value={memberIds} onChange={setMemberIds} />
       </div>
-      <label className="field"><span>Notas</span>
-        <textarea value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Nº de póliza, teléfono…" />
+      <label className="field"><span>{t('common.notes')}</span>
+        <textarea value={notes} onChange={(e) => setNotes(e.target.value)} placeholder={t('dates.notesPlaceholder')} />
       </label>
     </Sheet>
   );

@@ -5,7 +5,7 @@ import {
 } from 'lucide-react';
 import { useApp, useCollection, useNow, useToday } from '../lib/app';
 import { keyDateEmoji, keyDateLabel, useAgenda, useNextUp, type DayAgenda } from '../lib/agenda';
-import { DOW, cap, countdown, dayLong, dayRelative, euros, inDays, memberNames, timeRange } from '../lib/format';
+import { cap, countdown, dayLong, dayRelative, decimal, dow, euros, inDays, memberNames, timeRange } from '../lib/format';
 import { useWeather, weatherLabel, type Weather } from '../lib/weather';
 import { cheapestWindow, priceLevel, priceStats, usePvpc } from '../lib/pvpc';
 import { settlements } from '../lib/expenses';
@@ -17,6 +17,7 @@ import type { CalEvent, Expense, KeyDate, MenuDay, Note, ShoppingItem, Task } fr
 import { EventEditor } from '../components/EventEditor';
 import { DashboardEditor } from '../components/DashboardEditor';
 import { MemberDots, Sheet, WeatherIcon, memberColorStyle, toast } from '../components/ui';
+import { t, tn } from '../i18n';
 
 export default function Dashboard() {
   const { household, demo } = useApp();
@@ -52,12 +53,12 @@ export default function Dashboard() {
       ))}
       {layout.loaded && visible.length === 0 && (
         <div className="w m-2 d-3 card center" style={{ padding: 32 }}>
-          <p className="muted">Has ocultado todas las tarjetas.</p>
+          <p className="muted">{t('dash.allHidden')}</p>
         </div>
       )}
       <div className="w m-2 d-3" style={{ alignItems: 'center' }}>
         <button className="btn ghost sm" style={{ flex: 'none' }} onClick={() => setCustomizing(true)}>
-          <Settings2 size={16} /> Personalizar inicio
+          <Settings2 size={16} /> {t('dash.customize')}
         </button>
       </div>
       {editing && <EventEditor event={editing.ev} occurrence={editing.occ} onClose={() => setEditing(null)} />}
@@ -82,17 +83,17 @@ function AgendaCard({ today, onOpen }: { today: string; onOpen: (o: Occurrence) 
 
   return (
     <section className="card">
-      <a className="label" href={href('calendario')}><ListTodo size={14} /> Agenda</a>
+      <a className="label" href={href('calendar')}><ListTodo size={14} /> {t('widget.agenda')}</a>
       {days.map((d, di) => {
         const items = d.allDay.length + d.timed.length + d.keyDates.length;
         return (
           <div key={d.date} className="agenda-day">
             <div className="agenda-head">
-              <b>{di === 0 ? 'Hoy' : 'Mañana'}</b> <span className="muted">{dayLong(d.date)}</span>
+              <b>{di === 0 ? t('date.today') : t('date.tomorrow')}</b> <span className="muted">{dayLong(d.date)}</span>
             </div>
-            {items === 0 && <p className="small muted" style={{ padding: '4px 0 2px' }}>Nada previsto</p>}
+            {items === 0 && <p className="small muted" style={{ padding: '4px 0 2px' }}>{t('agenda.nothing')}</p>}
             {d.keyDates.map((kd) => (
-              <a key={kd.id} className="agenda-item" href={href('fechas')}>
+              <a key={kd.id} className="agenda-item" href={href('dates')}>
                 <span className="agenda-time">{keyDateEmoji(kd.kind)}</span>
                 <span className="bar" style={memberColorStyle(kd.memberIds, members)} />
                 <span className="grow item-title">{keyDateLabel(kd, d.date)}</span>
@@ -108,7 +109,7 @@ function AgendaCard({ today, onOpen }: { today: string; onOpen: (o: Occurrence) 
               }
               return (
                 <button key={o.key} className={`agenda-item${past ? ' past' : ''}`} onClick={() => onOpen(o)}>
-                  <span className="agenda-time num">{timed ? o.event.startTime : o.date !== d.date ? 'Sigue' : 'Todo el día'}</span>
+                  <span className="agenda-time num">{timed ? o.event.startTime : o.date !== d.date ? t('agenda.continues') : t('date.allDay')}</span>
                   <span className={`bar${(o.event.memberIds?.length ?? 0) > 1 ? ' multi' : ''}`} style={memberColorStyle(o.event.memberIds, members)} />
                   <span className="grow" style={{ minWidth: 0 }}>
                     <span className="item-title ellipsis" style={{ display: 'block' }}>{o.event.title}</span>
@@ -138,17 +139,17 @@ function MenuTodayCard({ today }: { today: string }) {
   return (
     <>
       <button className="card card-link" style={{ textAlign: 'left', width: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'flex-start' }} onClick={() => setEdit(true)}>
-        <div className="label" style={{ color: 'var(--amber)' }}><UtensilsCrossed size={14} /> Menú de hoy</div>
+        <div className="label" style={{ color: 'var(--amber)' }}><UtensilsCrossed size={14} /> {t('widget.menu')}</div>
         {empty ? (
-          <p className="small muted" style={{ marginTop: 10 }}>Sin planificar · toca para añadir</p>
+          <p className="small muted" style={{ marginTop: 10 }}>{t('menu.notPlanned')}</p>
         ) : (
           <div className="stack" style={{ gap: 6, marginTop: 10 }}>
-            <div><div className="tiny muted bold">COMIDA</div><div className="bold menu-dish">{m?.lunch || '—'}</div></div>
-            <div><div className="tiny muted bold">CENA</div><div className="bold menu-dish">{m?.dinner || '—'}</div></div>
+            <div><div className="tiny muted bold">{t('menu.lunch').toUpperCase()}</div><div className="bold menu-dish">{m?.lunch || '—'}</div></div>
+            <div><div className="tiny muted bold">{t('menu.dinner').toUpperCase()}</div><div className="bold menu-dish">{m?.dinner || '—'}</div></div>
           </div>
         )}
         {(tomorrow?.lunch || tomorrow?.dinner) && (
-          <p className="tiny muted ellipsis" style={{ marginTop: 8 }}>Mañana: {[tomorrow.lunch, tomorrow.dinner].filter(Boolean).join(' · ')}</p>
+          <p className="tiny muted ellipsis" style={{ marginTop: 8 }}>{t('menu.tomorrowPrefix')} {[tomorrow.lunch, tomorrow.dinner].filter(Boolean).join(' · ')}</p>
         )}
       </button>
       {edit && <MenuQuickEdit date={today} current={m} all={menu ?? []} onClose={() => setEdit(false)} />}
@@ -178,19 +179,19 @@ function MenuQuickEdit({ date, current, all, onClose }: { date: string; current?
 
   return (
     <Sheet
-      title={`Menú · ${dayLong(date)}`}
+      title={`${t('nav.menu')} · ${dayLong(date)}`}
       onClose={onClose}
       footer={<>
-        <a className="btn ghost" style={{ flex: 'none' }} href={href('menu')}>Ver la semana</a>
-        <button className="btn accent" onClick={save}>Guardar</button>
+        <a className="btn ghost" style={{ flex: 'none' }} href={href('menu')}>{t('menu.seeWeek')}</a>
+        <button className="btn accent" onClick={save}>{t('common.save')}</button>
       </>}
     >
       <datalist id="dishes-quick">{dishes.map((d) => <option key={d} value={d} />)}</datalist>
-      <label className="field"><span>Comida</span>
-        <input value={lunch} onChange={(e) => setLunch(e.target.value)} list="dishes-quick" placeholder="¿Qué se come hoy?" />
+      <label className="field"><span>{t('menu.lunch')}</span>
+        <input value={lunch} onChange={(e) => setLunch(e.target.value)} list="dishes-quick" placeholder={t('menu.lunchPlaceholder')} />
       </label>
-      <label className="field"><span>Cena</span>
-        <input value={dinner} onChange={(e) => setDinner(e.target.value)} list="dishes-quick" placeholder="¿Y para cenar?" />
+      <label className="field"><span>{t('menu.dinner')}</span>
+        <input value={dinner} onChange={(e) => setDinner(e.target.value)} list="dishes-quick" placeholder={t('menu.dinnerPlaceholder')} />
       </label>
     </Sheet>
   );
@@ -211,7 +212,7 @@ function Hero({ weather }: { weather?: Weather }) {
           <div className="hero-date"><b>{cap(dayLong(date).split(' ')[0])}</b> {dayLong(date).split(' ').slice(1).join(' ')}</div>
         </div>
         {weather && (
-          <a className="hero-now" href={href('tiempo')}>
+          <a className="hero-now" href={href('weather')}>
             <div className="row" style={{ justifyContent: 'flex-end', gap: 6 }}>
               <WeatherIcon code={weather.current.code} isDay={weather.current.isDay} size={30} />
               <span className="t num">{Math.round(weather.current.temp)}°</span>
@@ -225,16 +226,16 @@ function Hero({ weather }: { weather?: Weather }) {
           </a>
         )}
         {!weather && !household.location && (
-          <a className="hero-now s" href={href('ajustes')} style={{ opacity: .8, fontSize: 13 }}>Elige tu ciudad<br />para ver el tiempo</a>
+          <a className="hero-now s" href={href('settings')} style={{ opacity: .8, fontSize: 13, maxWidth: 140 }}>{t('hero.pickCity')}</a>
         )}
       </div>
       {weather && di >= 0 && (
-        <a className="hero-days" href={href('tiempo')}>
+        <a className="hero-days" href={href('weather')}>
           {weather.daily.date.slice(di + 1, di + 6).map((d, i) => {
             const k = di + 1 + i;
             return (
               <div className="hero-day num" key={d}>
-                <span>{DOW[weekday(d)]}</span>
+                <span>{dow()[weekday(d)]}</span>
                 <WeatherIcon code={weather.daily.code[k]} size={20} />
                 <span className="mx">{Math.round(weather.daily.max[k])}°</span>
                 <span className="mn">{Math.round(weather.daily.min[k])}°</span>
@@ -257,9 +258,9 @@ function NextCard({ onOpen }: { onOpen: (o: Occurrence) => void }) {
   if (!next) {
     return (
       <section className="next idle">
-        <div className="label">Lo próximo</div>
-        <div className="next-title">Nada a la vista</div>
-        <div className="next-when">Las próximas dos semanas están libres</div>
+        <div className="label">{t('widget.next')}</div>
+        <div className="next-title">{t('next.nothing')}</div>
+        <div className="next-when">{t('next.free')}</div>
       </section>
     );
   }
@@ -268,8 +269,8 @@ function NextCard({ onOpen }: { onOpen: (o: Occurrence) => void }) {
   return (
     <button className="next" style={{ textAlign: 'left' }} onClick={() => onOpen(next.occ)}>
       <div className="row" style={{ justifyContent: 'space-between' }}>
-        <div className="label">{ongoing ? 'Ahora' : 'Lo próximo'}</div>
-        <span className="pill">{ongoing ? 'en curso' : countdown(next.start - now)}</span>
+        <div className="label">{ongoing ? t('next.now') : t('widget.next')}</div>
+        <span className="pill">{ongoing ? t('next.inProgress') : countdown(next.start - now)}</span>
       </div>
       <div className="next-title">{next.occ.event.title}</div>
       <div className="next-when">
@@ -287,8 +288,8 @@ function WeekDay({ day, today, weather, onOpen }: { day: DayAgenda; today: strin
 
   return (
     <div className={`wday${isToday ? ' today' : ''}`}>
-      <a className="wday-head" href={href('calendario', day.date)}>
-        <span>{isToday ? 'Hoy' : DOW[weekday(day.date)]}</span>
+      <a className="wday-head" href={href('calendar', day.date)}>
+        <span>{isToday ? t('date.today') : dow()[weekday(day.date)]}</span>
         <span className="n num">{parts(day.date).d}</span>
       </a>
       {wi >= 0 && (
@@ -299,7 +300,7 @@ function WeekDay({ day, today, weather, onOpen }: { day: DayAgenda; today: strin
       )}
       <div className="wday-events">
         {day.keyDates.map((kd) => (
-          <a key={kd.id} className="wev allday" href={href('fechas')} style={memberColorStyle(kd.memberIds, members)}>
+          <a key={kd.id} className="wev allday" href={href('dates')} style={memberColorStyle(kd.memberIds, members)}>
             {keyDateEmoji(kd.kind)} {keyDateLabel(kd, day.date)}
           </a>
         ))}
@@ -330,20 +331,20 @@ function InviteCard() {
   const link = `${location.origin}/?join=${household.id}`;
   const share = async () => {
     if (navigator.share) {
-      try { await navigator.share({ title: household.name, text: `Únete a «${household.name}» en Casa`, url: link }); } catch { /* cancelado */ }
+      try { await navigator.share({ title: household.name, text: t('invite.shareText', { name: household.name }), url: link }); } catch { /* cancelled */ }
     } else {
       await navigator.clipboard.writeText(link);
-      toast('Enlace copiado');
+      toast(t('invite.copied'));
     }
   };
   return (
     <section className="card" style={{ background: 'var(--blue-soft)', borderColor: 'transparent' }}>
       <div className="row">
         <div className="grow">
-          <b>Invita a tu pareja</b>
-          <p className="small muted">Mándale el enlace para compartir la casa.</p>
+          <b>{t('invite.title')}</b>
+          <p className="small muted">{t('invite.text')}</p>
         </div>
-        <button className="btn sm" onClick={share}><Share2 size={16} /> Compartir</button>
+        <button className="btn sm" onClick={share}><Share2 size={16} /> {t('common.share')}</button>
       </div>
     </section>
   );
@@ -353,11 +354,11 @@ function ShoppingCard() {
   const items = useCollection<ShoppingItem>('shopping');
   const pending = (items ?? []).filter((i) => !i.done).sort((a, b) => b.createdAt - a.createdAt);
   return (
-    <a className="card card-link" href={href('compra')}>
-      <div className="label" style={{ color: 'var(--amber)' }}><ShoppingCart size={14} /> Compra</div>
-      <div className="big-num">{pending.length ? `${pending.length} ${pending.length === 1 ? 'cosa' : 'cosas'}` : 'Nada'}</div>
+    <a className="card card-link" href={href('shopping')}>
+      <div className="label" style={{ color: 'var(--amber)' }}><ShoppingCart size={14} /> {t('widget.shopping')}</div>
+      <div className="big-num">{pending.length ? tn('shopping.items', pending.length) : t('shopping.nothing')}</div>
       <p className="small muted" style={{ marginTop: 4, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
-        {pending.length ? pending.map((i) => i.name).join(' · ') : 'La lista está vacía'}
+        {pending.length ? pending.map((i) => i.name).join(' · ') : t('shopping.emptyShort')}
       </p>
     </a>
   );
@@ -366,24 +367,24 @@ function ShoppingCard() {
 function TasksCard({ today }: { today: string }) {
   const { members } = useApp();
   const tasks = useCollection<Task>('tasks');
-  const due = (tasks ?? []).filter((t) => !t.done && t.due && t.due <= today).sort((a, b) => (a.due! < b.due! ? -1 : 1));
+  const due = (tasks ?? []).filter((x) => !x.done && x.due && x.due <= today).sort((a, b) => (a.due! < b.due! ? -1 : 1));
   return (
-    <a className="card card-link" href={href('tareas')}>
-      <div className="label" style={{ color: 'var(--green)' }}><ListChecks size={14} /> Tareas de hoy</div>
+    <a className="card card-link" href={href('tasks')}>
+      <div className="label" style={{ color: 'var(--green)' }}><ListChecks size={14} /> {t('widget.tasks')}</div>
       {due.length === 0 ? (
         <>
-          <div className="big-num">🎉 Todo hecho</div>
-          <p className="small muted" style={{ marginTop: 4 }}>No hay nada pendiente hoy</p>
+          <div className="big-num">🎉 {t('tasks.allDone')}</div>
+          <p className="small muted" style={{ marginTop: 4 }}>{t('tasks.nothingToday')}</p>
         </>
       ) : (
         <>
-          <div className="big-num">{due.length} por hacer</div>
+          <div className="big-num">{t('tasks.toDo', { n: due.length })}</div>
           <div className="stack" style={{ gap: 4, marginTop: 6 }}>
-            {due.slice(0, 3).map((t) => (
-              <div key={t.id} className="row small" style={{ gap: 6 }}>
-                <MemberDots ids={t.memberIds} members={members} />
-                <span className="ellipsis grow" style={t.due! < today ? { color: 'var(--red)', fontWeight: 700 } : undefined}
-                  title={t.due! < today ? `Atrasada (${inDays(t.due!, today)})` : undefined}>{t.title}</span>
+            {due.slice(0, 3).map((x) => (
+              <div key={x.id} className="row small" style={{ gap: 6 }}>
+                <MemberDots ids={x.memberIds} members={members} />
+                <span className="ellipsis grow" style={x.due! < today ? { color: 'var(--red)', fontWeight: 700 } : undefined}
+                  title={x.due! < today ? t('tasks.overdueTitle', { when: inDays(x.due!, today) }) : undefined}>{x.title}</span>
               </div>
             ))}
           </div>
@@ -397,9 +398,9 @@ function EnergyCard() {
   const { data, hour } = usePvpc();
   if (!data) {
     return (
-      <a className="card card-link" href={href('luz')}>
-        <div className="label"><Zap size={14} /> Luz</div>
-        <p className="small muted" style={{ marginTop: 10 }}>Cargando precios…</p>
+      <a className="card card-link" href={href('energy')}>
+        <div className="label"><Zap size={14} /> {t('widget.energy')}</div>
+        <p className="small muted" style={{ marginTop: 10 }}>{t('energy.loading')}</p>
       </a>
     );
   }
@@ -409,10 +410,10 @@ function EnergyCard() {
   const best = cheapestWindow(data, 2, hour);
   const max = stats.max;
   return (
-    <a className="card card-link" href={href('luz')}>
-      <div className="label" style={{ color: 'var(--amber)' }}><Zap size={14} /> Luz ahora</div>
+    <a className="card card-link" href={href('energy')}>
+      <div className="label" style={{ color: 'var(--amber)' }}><Zap size={14} /> {t('energy.now')}</div>
       <div className="row" style={{ marginTop: 8, gap: 6, alignItems: 'baseline' }}>
-        <span className="num" style={{ fontSize: 22, fontWeight: 800 }}>{cur.price.toFixed(3).replace('.', ',')}</span>
+        <span className="num" style={{ fontSize: 22, fontWeight: 800 }}>{decimal(cur.price, 3)}</span>
         <span className="tiny muted bold">€/kWh</span>
         <span className={`dot lvl-${lvl}`} style={{ marginLeft: 'auto' }} />
       </div>
@@ -423,7 +424,7 @@ function EnergyCard() {
             style={{ height: `${Math.max(8, (h.price / max) * 100)}%` }} />
         ))}
       </div>
-      {best && <p className="small muted" style={{ marginTop: 8 }}>Más barata: <b>{best.start}:00–{best.start + 2}:00</b></p>}
+      {best && <p className="small muted" style={{ marginTop: 8 }}>{t('energy.cheapest')} <b>{best.start}:00–{best.start + 2}:00</b></p>}
     </a>
   );
 }
@@ -436,10 +437,10 @@ function DatesCard({ today }: { today: string }) {
     .sort((a, b) => (a.d! < b.d! ? -1 : 1))
     .slice(0, 3), [dates, today]);
   return (
-    <a className="card card-link" href={href('fechas')}>
-      <div className="label" style={{ color: 'var(--accent)' }}><CalendarClock size={14} /> Fechas</div>
+    <a className="card card-link" href={href('dates')}>
+      <div className="label" style={{ color: 'var(--accent)' }}><CalendarClock size={14} /> {t('widget.dates')}</div>
       {upcoming.length === 0 ? (
-        <p className="small muted" style={{ marginTop: 10 }}>Nada en las próximas semanas</p>
+        <p className="small muted" style={{ marginTop: 10 }}>{t('dates.nothingSoon')}</p>
       ) : (
         <div className="stack" style={{ gap: 6, marginTop: 10 }}>
           {upcoming.map(({ kd, d }) => (
@@ -464,11 +465,11 @@ function ExpensesCard({ today }: { today: string }) {
   const total = (expenses ?? []).filter((e) => e.kind === 'expense' && e.date.startsWith(month)).reduce((a, e) => a + e.amount, 0);
   const debts = settlements(expenses ?? [], adults);
   return (
-    <a className="card card-link" href={href('gastos')}>
-      <div className="label" style={{ color: 'var(--blue)' }}><Wallet size={14} /> Gastos del mes</div>
+    <a className="card card-link" href={href('expenses')}>
+      <div className="label" style={{ color: 'var(--blue)' }}><Wallet size={14} /> {t('expenses.thisMonth')}</div>
       <div className="big-num num">{euros(total)}</div>
       <p className="small muted" style={{ marginTop: 4 }}>
-        {debts.length ? <>{debts[0].from.name} debe <b>{euros(debts[0].amount)}</b> a {debts[0].to.name}</> : 'Estáis en paz ✌️'}
+        {debts.length ? <>{debts[0].from.name} {t('expenses.owes')} <b>{euros(debts[0].amount)}</b> {t('expenses.to')} {debts[0].to.name}</> : t('expenses.settledUp')}
       </p>
     </a>
   );
@@ -479,15 +480,15 @@ function NotesCard() {
   const pinned = (notes ?? []).filter((n) => n.pinned).sort((a, b) => b.updatedAt - a.updatedAt);
   const n = pinned[0] ?? (notes ?? []).sort((a, b) => b.updatedAt - a.updatedAt)[0];
   return (
-    <a className="card card-link" href={href('notas')} style={n ? { background: n.color, borderColor: 'transparent' } as CSSProperties : undefined}>
-      <div className="label" style={n ? { color: '#8b8274' } : undefined}><StickyNote size={14} /> Notas</div>
+    <a className="card card-link" href={href('notes')} style={n ? { background: n.color, borderColor: 'transparent' } as CSSProperties : undefined}>
+      <div className="label" style={n ? { color: '#8b8274' } : undefined}><StickyNote size={14} /> {t('widget.notes')}</div>
       {n ? (
         <>
           <div className="bold" style={{ marginTop: 8, color: '#2a2620' }}>{n.title}</div>
           <p className="small" style={{ marginTop: 2, color: '#4a443b', whiteSpace: 'pre-line', display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{n.body}</p>
         </>
       ) : (
-        <p className="small muted" style={{ marginTop: 10 }}>Sin notas todavía</p>
+        <p className="small muted" style={{ marginTop: 10 }}>{t('notes.noneYet')}</p>
       )}
     </a>
   );

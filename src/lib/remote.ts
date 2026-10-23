@@ -14,12 +14,12 @@ function readCache<T>(key: string): Entry<T> | null {
 function writeCache<T>(key: string, data: T) {
   try {
     localStorage.setItem('casa-cache:' + key, JSON.stringify({ at: Date.now(), data }));
-  } catch { /* almacenamiento lleno: no pasa nada */ }
+  } catch { /* storage full: not a problem */ }
 }
 
 /**
- * Datos externos (tiempo, luz) con caché en localStorage.
- * Muestra lo cacheado al instante y refresca si ha caducado.
+ * External data (weather, electricity prices) cached in localStorage.
+ * Shows the cached copy immediately and refreshes it when stale.
  */
 export function useRemote<T>(key: string | null, fetcher: () => Promise<T>, ttlMs: number) {
   const [state, setState] = useState<{ key: string | null; data?: T; error?: string; loading: boolean }>(() => {

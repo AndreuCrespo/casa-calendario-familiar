@@ -1,6 +1,6 @@
-// npm run icons → genera los iconos de la app a partir de los SVG.
-//   public/favicon.svg   (esquinas redondeadas) → iconos normales y favicon.ico
-//   assets/icon-full.svg (a sangre)            → iPhone y icono adaptable de Android
+// npm run icons → generates the app icons from the SVG sources.
+//   public/favicon.svg   (rounded corners) → regular icons and favicon.ico
+//   assets/icon-full.svg (full-bleed)      → iPhone and Android adaptive icon
 import { writeFile } from 'node:fs/promises';
 import sharp from 'sharp';
 
@@ -21,17 +21,17 @@ for (const [src, out, size] of jobs) {
   console.log(`✓ ${out}`);
 }
 
-// favicon.ico de 32×32: un ICO que lleva dentro un PNG (lo aceptan todos los navegadores).
+// 32×32 favicon.ico: an ICO container holding a PNG (supported by every browser).
 const png = await render('public/favicon.svg', 32).toBuffer();
 const header = Buffer.alloc(22);
-header.writeUInt16LE(0, 0); // reservado
-header.writeUInt16LE(1, 2); // tipo: icono
-header.writeUInt16LE(1, 4); // una imagen
-header.writeUInt8(32, 6); // ancho
-header.writeUInt8(32, 7); // alto
-header.writeUInt16LE(1, 10); // planos
-header.writeUInt16LE(32, 12); // bits por píxel
+header.writeUInt16LE(0, 0); // reserved
+header.writeUInt16LE(1, 2); // type: icon
+header.writeUInt16LE(1, 4); // one image
+header.writeUInt8(32, 6); // width
+header.writeUInt8(32, 7); // height
+header.writeUInt16LE(1, 10); // colour planes
+header.writeUInt16LE(32, 12); // bits per pixel
 header.writeUInt32LE(png.length, 14);
-header.writeUInt32LE(22, 18); // posición de la imagen
+header.writeUInt32LE(22, 18); // image offset
 await writeFile('public/favicon.ico', Buffer.concat([header, png]));
 console.log('✓ public/favicon.ico');

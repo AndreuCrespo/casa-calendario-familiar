@@ -1,10 +1,11 @@
 import { useMemo, useState } from 'react';
 import { ChevronLeft, ChevronRight, Copy } from 'lucide-react';
 import { useApp, useCollection, useToday } from '../lib/app';
-import { DOW, MONTHS_SHORT } from '../lib/format';
+import { dow, monthShort } from '../lib/format';
 import { addDays, parts, startOfWeek, type DateStr } from '../shared/dates';
 import type { MenuDay } from '../shared/types';
 import { PageHead, toast } from '../components/ui';
+import { t } from '../i18n';
 
 export default function Menu() {
   const { backend, log } = useApp();
@@ -36,17 +37,17 @@ export default function Menu() {
         n++;
       }
     }
-    toast(n ? 'Semana anterior copiada' : 'La semana anterior está vacía');
+    toast(n ? t('menu.copied') : t('menu.prevEmpty'));
   };
 
   const end = addDays(week, 6);
-  const sub = `${parts(week).d} ${MONTHS_SHORT[parts(week).m - 1]} – ${parts(end).d} ${MONTHS_SHORT[parts(end).m - 1]}`;
+  const sub = `${parts(week).d} ${monthShort(parts(week).m)} – ${parts(end).d} ${monthShort(parts(end).m)}`;
 
   return (
     <>
-      <PageHead title="Menú" sub={sub}>
-        <button className="icon-btn solid" onClick={() => setWeek(addDays(week, -7))} aria-label="Semana anterior"><ChevronLeft size={20} /></button>
-        <button className="icon-btn solid" onClick={() => setWeek(addDays(week, 7))} aria-label="Semana siguiente"><ChevronRight size={20} /></button>
+      <PageHead title={t('nav.menu')} sub={sub}>
+        <button className="icon-btn solid" onClick={() => setWeek(addDays(week, -7))} aria-label={t('menu.prevWeek')}><ChevronLeft size={20} /></button>
+        <button className="icon-btn solid" onClick={() => setWeek(addDays(week, 7))} aria-label={t('menu.nextWeek')}><ChevronRight size={20} /></button>
       </PageHead>
 
       <datalist id="dishes">{dishes.map((d) => <option key={d} value={d} />)}</datalist>
@@ -57,13 +58,13 @@ export default function Menu() {
           return (
             <div key={d} className={`menu-day${d === today ? ' today' : ''}`}>
               <div className="cal-day-num">
-                <span className="d">{DOW[i]}</span>
+                <span className="d">{dow()[i]}</span>
                 <span className="n num">{parts(d).d}</span>
               </div>
               <div className="menu-inputs">
                 {(['lunch', 'dinner'] as const).map((f) => (
                   <label key={f}>
-                    <span>{f === 'lunch' ? 'Comida' : 'Cena'}</span>
+                    <span>{f === 'lunch' ? t('menu.lunch') : t('menu.dinner')}</span>
                     <input
                       key={`${d}-${f}-${m?.[f] ?? ''}`}
                       defaultValue={m?.[f] ?? ''}
@@ -82,7 +83,7 @@ export default function Menu() {
       </div>
 
       <div className="row" style={{ marginTop: 14, justifyContent: 'center' }}>
-        <button className="btn ghost sm" onClick={copyPrev}><Copy size={15} /> Copiar la semana anterior</button>
+        <button className="btn ghost sm" onClick={copyPrev}><Copy size={15} /> {t('menu.copyPrev')}</button>
       </div>
     </>
   );

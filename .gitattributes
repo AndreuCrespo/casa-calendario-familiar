@@ -1,4 +1,4 @@
-# Saltos de línea LF en el repositorio (se trabaja desde WSL y Windows)
+# LF line endings in the repository (worked on from both WSL and Windows)
 * text=auto eol=lf
 *.png binary
 *.ico binary

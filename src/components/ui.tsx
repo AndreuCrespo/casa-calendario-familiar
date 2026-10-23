@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import type { Member } from '../shared/types';
 import { weatherKind } from '../lib/weather';
+import { LANGS, setLang, t, useLang } from '../i18n';
 
 export function PageHead({ title, sub, children }: { title: ReactNode; sub?: ReactNode; children?: ReactNode }) {
   return (
@@ -34,9 +35,9 @@ export function Sheet({ title, onClose, children, footer }: {
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && closeRef.current();
     window.addEventListener('keydown', onKey);
 
-    // Android: el botón o gesto «atrás» cierra la hoja en vez de cambiar de pantalla.
-    // Se añade una entrada al historial mientras está abierta (con setTimeout para
-    // que el doble montaje de StrictMode en desarrollo no deje entradas sueltas).
+    // Android: the back button/gesture closes the sheet instead of changing screen.
+    // A history entry is added while it's open (in a setTimeout so StrictMode's
+    // double mount in development doesn't leave stray entries).
     const id = Math.random().toString(36).slice(2);
     let pushed = false;
     let closedByBack = false;
@@ -49,7 +50,7 @@ export function Sheet({ title, onClose, children, footer }: {
       window.removeEventListener('keydown', onKey);
       window.removeEventListener('popstate', onPop);
       clearTimeout(t);
-      // Cerrada con ✕ o Guardar: quitar la entrada que añadimos (si seguimos en ella).
+      // Closed with ✕ or Save: drop the entry we added (if we're still on it).
       if (pushed && !closedByBack && history.state?.casaSheet === id) history.back();
     };
   }, []);
@@ -59,7 +60,7 @@ export function Sheet({ title, onClose, children, footer }: {
       <div className="sheet" role="dialog" aria-modal="true">
         <div className="sheet-head">
           <h2>{title}</h2>
-          <button className="icon-btn" onClick={onClose} aria-label="Cerrar"><X size={22} /></button>
+          <button className="icon-btn" onClick={onClose} aria-label={t('common.close')}><X size={22} /></button>
         </div>
         <div className="sheet-body">{children}</div>
         {footer && <div className="sheet-foot">{footer}</div>}
@@ -81,7 +82,7 @@ export function Empty({ icon: Icon, title, children }: { icon: LucideIcon; title
 
 export function CheckCircle({ on, onClick, label }: { on: boolean; onClick: () => void; label?: string }) {
   return (
-    <button className={`check${on ? ' on' : ''}`} onClick={onClick} aria-label={label ?? (on ? 'Desmarcar' : 'Marcar')}>
+    <button className={`check${on ? ' on' : ''}`} onClick={onClick} aria-label={label ?? (on ? t('common.uncheck') : t('common.check'))}>
       <Check size={16} strokeWidth={3.2} />
     </button>
   );
@@ -125,7 +126,7 @@ export function MemberPicker({ members, value, onChange, single }: {
   );
 }
 
-/** Color de la barra de un evento según sus miembros. */
+/** Bar color of an event, from its members. */
 export function memberColorStyle(ids: string[] | undefined, members: Member[]): CSSProperties {
   const cs = (ids ?? []).map((id) => members.find((m) => m.id === id)?.color).filter(Boolean) as string[];
   return { '--c': cs[0] ?? 'var(--border-strong)', '--c1': cs[0], '--c2': cs[1] ?? cs[0] } as CSSProperties;
@@ -146,7 +147,7 @@ export function WeatherIcon({ code, isDay = true, size = 20, className }: { code
   }
 }
 
-// ---------- avisos breves ----------
+// ---------- toasts ----------
 
 interface ToastMsg { id: number; text: string; action?: { label: string; run: () => void } }
 let pushToast: ((t: Omit<ToastMsg, 'id'>) => void) | null = null;
@@ -159,7 +160,7 @@ export function ToastHost() {
   const [msg, setMsg] = useState<ToastMsg | null>(null);
   useEffect(() => {
     pushToast = (t) => setMsg({ ...t, id: Date.now() });
-    const onErr = (e: Event) => setMsg({ id: Date.now(), text: `Error: ${(e as CustomEvent).detail}` });
+    const onErr = (e: Event) => setMsg({ id: Date.now(), text: t('common.errorPrefix', { msg: (e as CustomEvent).detail }) });
     window.addEventListener('casa:error', onErr);
     return () => { pushToast = null; window.removeEventListener('casa:error', onErr); };
   }, []);
@@ -175,6 +176,18 @@ export function ToastHost() {
       {msg.action && <button onClick={() => { msg.action!.run(); setMsg(null); }}>{msg.action.label}</button>}
     </div>,
     document.body,
+  );
+}
+
+/** Compact ES | EN language switch. */
+export function LangSwitch() {
+  const lang = useLang();
+  return (
+    <div className="seg" role="group" aria-label={t('settings.language')}>
+      {LANGS.map((l) => (
+        <button key={l.id} className={lang === l.id ? 'on' : ''} onClick={() => setLang(l.id)} aria-label={l.label}>{l.short}</button>
+      ))}
+    </div>
   );
 }
 

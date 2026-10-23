@@ -10,7 +10,7 @@ clientsClaim();
 precacheAndRoute(self.__WB_MANIFEST);
 cleanupOutdatedCaches();
 registerRoute(new NavigationRoute(createHandlerBoundToURL('index.html'), {
-  denylist: [/^\/__\//], // rutas internas de Firebase (login)
+  denylist: [/^\/__\//], // Firebase's reserved URLs (sign-in handler)
 }));
 
 interface PushPayload { title?: string; body?: string; url?: string; tag?: string }

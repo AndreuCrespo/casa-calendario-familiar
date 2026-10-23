@@ -9,7 +9,7 @@ export interface AppUser {
   email: string | null;
 }
 
-/** Mantiene vivas las suscripciones a cada colección para cambiar de pestaña sin esperas. */
+/** Keeps one live subscription per collection so switching tabs is instant. */
 export class CollectionCache {
   private data = new Map<string, unknown[]>();
   private subs = new Map<string, Set<() => void>>();
@@ -35,8 +35,8 @@ export class CollectionCache {
         this.subs.get(coll)?.forEach((f) => f());
       },
       (e) => {
-        // Una suscripción que falla se cierra: se reintenta con esperas crecientes
-        // (p. ej. permisos que el servidor aún no ha aplicado) y solo se avisa si persiste.
+        // A failed subscription is closed: retry with growing delays (e.g. permissions
+        // the server hasn't applied yet) and only tell the user if it keeps failing.
         this.started.delete(coll);
         const n = (this.failures.get(coll) ?? 0) + 1;
         this.failures.set(coll, n);
@@ -71,7 +71,7 @@ export function AppProvider({ value, children }: { value: AppState; children: Re
 
 export function useApp(): AppState {
   const v = useContext(Ctx);
-  if (!v) throw new Error('useApp fuera de AppProvider');
+  if (!v) throw new Error('useApp used outside AppProvider');
   return v;
 }
 
@@ -88,7 +88,7 @@ export function useMember(id: string | null | undefined) {
   return members.find((m) => m.id === id);
 }
 
-/** Hora actual, refrescada cada `ms`. */
+/** Current time, refreshed every `ms`. */
 export function useNow(ms = 30_000) {
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {

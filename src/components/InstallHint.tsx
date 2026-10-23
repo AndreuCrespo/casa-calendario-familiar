@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Download, Share } from 'lucide-react';
 import { isIOS, isStandalone } from '../lib/push';
+import { t } from '../i18n';
 
 interface BeforeInstallPromptEvent extends Event {
   prompt: () => Promise<void>;
@@ -12,7 +13,7 @@ window.addEventListener('beforeinstallprompt', (e) => {
   deferred = e as BeforeInstallPromptEvent;
 });
 
-/** Explica cómo instalar la app si aún se usa desde el navegador. */
+/** Explains how to install the app while it's still used from the browser. */
 export function InstallHint() {
   const [canPrompt, setCanPrompt] = useState(!!deferred);
   useEffect(() => {
@@ -27,7 +28,7 @@ export function InstallHint() {
     return (
       <div className="banner">
         <Share size={22} />
-        <div>Para instalarla en el iPhone: en Safari pulsa <b>Compartir</b> → <b>Añadir a pantalla de inicio</b>. Así funcionan las notificaciones.</div>
+        <div>{t('install.ios1')} <b>{t('install.iosShare')}</b> → <b>{t('install.iosAdd')}</b>. {t('install.ios2')}</div>
       </div>
     );
   }
@@ -35,8 +36,8 @@ export function InstallHint() {
     return (
       <div className="banner">
         <Download size={22} />
-        <div className="grow">Instala la app en el móvil para abrirla como una más.</div>
-        <button className="btn sm" onClick={async () => { await deferred?.prompt(); deferred = null; setCanPrompt(false); }}>Instalar</button>
+        <div className="grow">{t('install.android')}</div>
+        <button className="btn sm" onClick={async () => { await deferred?.prompt(); deferred = null; setCanPrompt(false); }}>{t('install.button')}</button>
       </div>
     );
   }

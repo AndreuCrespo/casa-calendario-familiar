@@ -1,14 +1,14 @@
 import type { Member } from '../shared/types';
 
 export const MEMBER_COLORS = [
-  '#4C7DF0', // azul
-  '#E2558A', // rosa
-  '#8B5CF6', // violeta
-  '#22A06B', // verde
-  '#F08C2E', // naranja
-  '#14A3B8', // turquesa
-  '#D9483B', // rojo
-  '#A16207', // mostaza
+  '#4C7DF0', // blue
+  '#E2558A', // pink
+  '#8B5CF6', // violet
+  '#22A06B', // green
+  '#F08C2E', // orange
+  '#14A3B8', // teal
+  '#D9483B', // red
+  '#A16207', // mustard
 ];
 
 export function nextColor(used: Member[]) {

@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type CSSProperties } from 'react';
 import { ChevronLeft, ChevronRight, MapPin, Plus, Repeat } from 'lucide-react';
 import { useApp, useToday } from '../lib/app';
 import { keyDateEmoji, keyDateLabel, useAgenda, type DayAgenda } from '../lib/agenda';
-import { DOW, MONTHS, MONTHS_SHORT, cap, timeRange } from '../lib/format';
+import { cap, dow, monthName, monthShort, timeRange } from '../lib/format';
+import { t } from '../i18n';
 import { href, useRoute } from '../lib/router';
 import { useWeather } from '../lib/weather';
 import {
@@ -31,7 +32,7 @@ export default function Calendar() {
 
   useEffect(() => { localStorage.setItem('casa-calview', view); }, [view]);
 
-  // En la vista semana, baja hasta hoy (o el día pedido) al abrir
+  // In week view, scroll down to today (or the requested day) when opening
   useEffect(() => {
     if (view !== 'week') return;
     const el = document.querySelector('.cal-day.today, .cal-day.target');
@@ -64,10 +65,10 @@ export default function Calendar() {
   };
 
   const title = view === 'week'
-    ? <>Semana {isoWeek(from)}</>
-    : <>{cap(MONTHS[parts(anchor).m - 1])} <span className="muted">{parts(anchor).y}</span></>;
+    ? <>{t('calendar.week', { n: isoWeek(from) })}</>
+    : <>{cap(monthName(parts(anchor).m))} <span className="muted">{parts(anchor).y}</span></>;
   const sub = view === 'week'
-    ? `${parts(from).d} ${MONTHS_SHORT[parts(from).m - 1]} – ${parts(to).d} ${MONTHS_SHORT[parts(to).m - 1]}`
+    ? `${parts(from).d} ${monthShort(parts(from).m)} – ${parts(to).d} ${monthShort(parts(to).m)}`
     : null;
 
   const open = (o: Occurrence) => setEditing({ ev: o.event, occ: o.date });
@@ -81,15 +82,15 @@ export default function Calendar() {
           {sub && <div className="page-sub">{sub}</div>}
         </div>
         <div className="seg">
-          <button className={view === 'week' ? 'on' : ''} onClick={() => setView('week')}>Semana</button>
-          <button className={view === 'month' ? 'on' : ''} onClick={() => setView('month')}>Mes</button>
+          <button className={view === 'week' ? 'on' : ''} onClick={() => setView('week')}>{t('calendar.weekView')}</button>
+          <button className={view === 'month' ? 'on' : ''} onClick={() => setView('month')}>{t('calendar.monthView')}</button>
         </div>
       </header>
 
       <div className="cal-toolbar">
-        <button className="icon-btn solid" onClick={() => move(-1)} aria-label="Anterior"><ChevronLeft size={20} /></button>
-        <button className="icon-btn solid" onClick={() => move(1)} aria-label="Siguiente"><ChevronRight size={20} /></button>
-        <button className="btn soft sm" onClick={goToday}>Hoy</button>
+        <button className="icon-btn solid" onClick={() => move(-1)} aria-label={t('common.previous')}><ChevronLeft size={20} /></button>
+        <button className="icon-btn solid" onClick={() => move(1)} aria-label={t('common.next')}><ChevronRight size={20} /></button>
+        <button className="btn soft sm" onClick={goToday}>{t('date.today')}</button>
         <div className="grow" />
       </div>
 
@@ -98,7 +99,7 @@ export default function Calendar() {
           {members.map((m) => {
             const on = !filter || filter.includes(m.id);
             return (
-              <button key={m.id} className={`chip sm${on ? ' on' : ''}`} style={{ '--c': m.color } as React.CSSProperties} onClick={() => toggleMember(m.id)}>
+              <button key={m.id} className={`chip sm${on ? ' on' : ''}`} style={{ '--c': m.color } as CSSProperties} onClick={() => toggleMember(m.id)}>
                 <span className="dot" />{m.name}
               </button>
             );
@@ -117,7 +118,7 @@ export default function Calendar() {
         return d ? <div style={{ marginTop: 16 }}><DayBlock day={d} today={today} onOpen={open} onNew={newOn} /></div> : null;
       })()}
 
-      <button className="fab" onClick={() => newOn(view === 'month' ? selected : (today >= from && today <= to ? today : from))} aria-label="Nuevo evento">
+      <button className="fab" onClick={() => newOn(view === 'month' ? selected : (today >= from && today <= to ? today : from))} aria-label={t('event.new')}>
         <Plus size={28} />
       </button>
 
@@ -152,23 +153,23 @@ function DayBlock({ day, today, target, onOpen, onNew }: {
     <section className={`cal-day${cls}`}>
       <div className="cal-day-head">
         <div className="cal-day-num">
-          <span className="d">{DOW[weekday(day.date)]}</span>
+          <span className="d">{dow()[weekday(day.date)]}</span>
           <span className="n num">{p.d}</span>
         </div>
         <div className="grow row" style={{ gap: 8 }}>
-          {day.date === today && <span className="pill red">Hoy</span>}
+          {day.date === today && <span className="pill red">{t('date.today')}</span>}
           {wi >= 0 && (
-            <a className="row tiny muted num" style={{ gap: 4, fontWeight: 700 }} href={href('tiempo')}>
+            <a className="row tiny muted num" style={{ gap: 4, fontWeight: 700 }} href={href('weather')}>
               <WeatherIcon code={w!.daily.code[wi]} size={15} />
               {Math.round(w!.daily.max[wi])}° / {Math.round(w!.daily.min[wi])}°
             </a>
           )}
         </div>
-        <button className="icon-btn sm" onClick={() => onNew(day.date)} aria-label="Añadir evento este día"><Plus size={18} /></button>
+        <button className="icon-btn sm" onClick={() => onNew(day.date)} aria-label={t('calendar.addOnDay')}><Plus size={18} /></button>
       </div>
       <div className="cal-items">
         {day.keyDates.map((kd) => (
-          <a key={kd.id} className="cal-ev kd" href={href('fechas')}>
+          <a key={kd.id} className="cal-ev kd" href={href('dates')}>
             <span className="bar" style={memberColorStyle(kd.memberIds, members)} />
             <div className="grow"><div className="n">{keyDateEmoji(kd.kind)} {keyDateLabel(kd, day.date)}</div></div>
           </a>
@@ -180,7 +181,7 @@ function DayBlock({ day, today, target, onOpen, onNew }: {
               <span className={`bar${multi ? ' multi' : ''}`} style={memberColorStyle(o.event.memberIds, members)} />
               <div className="grow" style={{ minWidth: 0 }}>
                 <div className="t num row" style={{ gap: 6 }}>
-                  {o.date !== day.date ? 'Continúa' : timeRange(o.event)}
+                  {o.date !== day.date ? t('agenda.continues') : timeRange(o.event)}
                   {o.event.recurrence && <Repeat size={12} />}
                 </div>
                 <div className="n">{o.event.title}</div>
@@ -194,7 +195,7 @@ function DayBlock({ day, today, target, onOpen, onNew }: {
           <a className="cal-menu" href={href('menu')}>🍽️ {[day.menu?.lunch, day.menu?.dinner].filter(Boolean).join(' · ')}</a>
         )}
         {!items.length && !day.keyDates.length && (
-          <button className="cal-add" onClick={() => onNew(day.date)}>Sin planes · <Plus size={13} /> añadir</button>
+          <button className="cal-add" onClick={() => onNew(day.date)}>{t('calendar.noPlans')} · <Plus size={13} /> {t('calendar.addLower')}</button>
         )}
       </div>
     </section>
@@ -212,7 +213,7 @@ function MonthGrid({ days, anchor, today, selected, onSelect }: {
   const month = anchor.slice(0, 7);
   return (
     <div className="month">
-      {DOW.map((d) => <div key={d} className="month-dow">{d}</div>)}
+      {dow().map((d) => <div key={d} className="month-dow">{d}</div>)}
       {days.map((d) => {
         const all = [...d.allDay, ...d.timed];
         const colors = Array.from(new Set(all.flatMap((o) => o.event.memberIds?.length ? o.event.memberIds : ['_'])));
@@ -232,14 +233,14 @@ function MonthGrid({ days, anchor, today, selected, onSelect }: {
               ))}
             </span>
             {d.keyDates.slice(0, 1).map((kd) => (
-              <span key={kd.id} className="mev hide-narrow" style={{ '--c': 'var(--accent)' } as React.CSSProperties}>{keyDateEmoji(kd.kind)} {kd.title}</span>
+              <span key={kd.id} className="mev hide-narrow" style={{ '--c': 'var(--accent)' } as CSSProperties}>{keyDateEmoji(kd.kind)} {kd.title}</span>
             ))}
             {all.slice(0, 3).map((o) => (
               <span key={o.key} className="mev hide-narrow" style={memberColorStyle(o.event.memberIds, members)}>
                 {o.event.startTime && o.date === d.date ? `${o.event.startTime} ` : ''}{o.event.title}
               </span>
             ))}
-            {all.length > 3 && <span className="mev hide-narrow muted" style={{ borderLeft: 0 }}>+{all.length - 3} más</span>}
+            {all.length > 3 && <span className="mev hide-narrow muted" style={{ borderLeft: 0 }}>{t('calendar.more', { n: all.length - 3 })}</span>}
           </button>
         );
       })}

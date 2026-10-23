@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { MapPin, Search } from 'lucide-react';
 import { searchPlaces, type GeoResult } from '../lib/weather';
+import { t } from '../i18n';
 
 export function LocationSearch({ onPick }: { onPick: (r: GeoResult) => void }) {
   const [q, setQ] = useState('');
@@ -22,12 +23,12 @@ export function LocationSearch({ onPick }: { onPick: (r: GeoResult) => void }) {
   return (
     <div className="stack" style={{ gap: 8 }}>
       <form className="row" onSubmit={(e) => { e.preventDefault(); run(); }}>
-        <input className="input grow" placeholder="Busca tu ciudad o pueblo" value={q} onChange={(e) => setQ(e.target.value)} />
-        <button className="btn soft" type="submit" disabled={busy} aria-label="Buscar"><Search size={18} /></button>
+        <input className="input grow" placeholder={t('location.placeholder')} value={q} onChange={(e) => setQ(e.target.value)} />
+        <button className="btn soft" type="submit" disabled={busy} aria-label={t('common.search')}><Search size={18} /></button>
       </form>
       {res && (
         <div className="list">
-          {res.length === 0 && <div className="list-item muted">Sin resultados</div>}
+          {res.length === 0 && <div className="list-item muted">{t('location.noResults')}</div>}
           {res.map((r) => (
             <button
               key={`${r.lat},${r.lon}`}

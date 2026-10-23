@@ -5,6 +5,7 @@ import { auth, db, firebaseEnabled } from './lib/firebase';
 import { FirestoreBackend, LocalBackend, type Backend } from './lib/backend';
 import { AppProvider, CollectionCache, type AppState, type AppUser } from './lib/app';
 import { seedDemo } from './lib/demo';
+import { getLang } from './i18n';
 import type { Household } from './shared/types';
 import { ClaimMember, Join, Login, Onboarding, Welcome } from './pages/Auth';
 import { Shell } from './Shell';
@@ -17,7 +18,7 @@ function Splash() {
 export default function Root() {
   const [demo, setDemo] = useState(() => !firebaseEnabled && LocalBackend.hasData());
   if (demo) return <DemoRoot onExit={() => { LocalBackend.reset(); setDemo(false); }} />;
-  if (!firebaseEnabled) return <Welcome onDemo={() => { seedDemo(); setDemo(true); }} />;
+  if (!firebaseEnabled) return <Welcome onDemo={() => { seedDemo(getLang()); setDemo(true); }} />;
   return <FirebaseRoot />;
 }
 
@@ -47,9 +48,9 @@ function HouseholdGate({ user }: { user: User }) {
 
   useEffect(() => {
     const q = query(collection(db!, 'households'), where('memberUids', 'array-contains', user.uid));
-    // Solo se entra en una casa ya confirmada por el servidor. Justo después de
-    // crearla o de unirse, Firestore la muestra en local antes de guardarla, y
-    // si entráramos ya, las reglas aún no nos verían como miembros (permiso denegado).
+    // Only enter a household the server has confirmed. Right after creating or
+    // joining one, Firestore shows it locally before saving it, and entering then
+    // would fail: the rules wouldn't see us as a member yet (permission denied).
     return onSnapshot(q, { includeMetadataChanges: true }, (snap) => {
       const confirmed = snap.docs.find((d) => !d.metadata.hasPendingWrites);
       if (confirmed) setHid(confirmed.id);

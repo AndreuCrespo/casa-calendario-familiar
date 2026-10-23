@@ -21,6 +21,6 @@ export function applyTheme(t: ThemePref = getTheme()) {
 }
 
 export function setTheme(t: ThemePref) {
-  try { localStorage.setItem(KEY, t); } catch { /* sin almacenamiento */ }
+  try { localStorage.setItem(KEY, t); } catch { /* storage unavailable */ }
   applyTheme(t);
 }

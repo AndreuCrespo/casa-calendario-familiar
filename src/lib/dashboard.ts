@@ -1,39 +1,40 @@
-// Configuración del inicio: qué tarjetas se ven y en qué orden (por persona).
+// Home dashboard settings: which cards are shown and in what order (per person).
 import { useMemo } from 'react';
 import {
   CalendarClock, CalendarDays, CloudSun, ListChecks, ListTodo, ShoppingCart, Sparkles, StickyNote,
   UtensilsCrossed, Wallet, Zap, type LucideIcon,
 } from 'lucide-react';
 import { useApp, useCollection } from './app';
+import type { MessageKey } from '../i18n';
 
 export type WidgetId =
   | 'hero' | 'next' | 'agenda' | 'week' | 'menu'
   | 'shopping' | 'tasks' | 'energy' | 'dates' | 'expenses' | 'notes';
 
-/** hero/wide: fila entera en el móvil, 2/3 en pantalla grande · half: media fila / 1/3 · full: siempre entera */
+/** hero/wide: full row on phones, 2/3 on large screens · half: half row / 1/3 · full: always a full row */
 export type WidgetSize = 'hero' | 'next' | 'wide' | 'full' | 'half';
 
-export interface WidgetMeta { id: WidgetId; label: string; sub: string; icon: LucideIcon; size: WidgetSize }
+export interface WidgetMeta { id: WidgetId; label: MessageKey; sub: MessageKey; icon: LucideIcon; size: WidgetSize }
 
-/** En el orden por defecto. */
+/** In default order. */
 export const WIDGETS: WidgetMeta[] = [
-  { id: 'hero', label: 'Reloj y tiempo', sub: 'Hora, fecha y previsión de 5 días', icon: CloudSun, size: 'hero' },
-  { id: 'next', label: 'Lo próximo', sub: 'Siguiente evento con cuenta atrás', icon: Sparkles, size: 'next' },
-  { id: 'agenda', label: 'Agenda', sub: 'Lo de hoy y mañana en lista', icon: ListTodo, size: 'wide' },
-  { id: 'menu', label: 'Menú de hoy', sub: 'Comida y cena, con edición rápida', icon: UtensilsCrossed, size: 'half' },
-  { id: 'week', label: 'Semana', sub: 'Los próximos 7 días en columnas', icon: CalendarDays, size: 'full' },
-  { id: 'shopping', label: 'Compra', sub: 'Lo que falta por comprar', icon: ShoppingCart, size: 'half' },
-  { id: 'tasks', label: 'Tareas de hoy', sub: 'Pendientes y atrasadas', icon: ListChecks, size: 'half' },
-  { id: 'energy', label: 'Luz', sub: 'Precio ahora y horas baratas', icon: Zap, size: 'half' },
-  { id: 'dates', label: 'Fechas', sub: 'Cumpleaños y vencimientos cercanos', icon: CalendarClock, size: 'half' },
-  { id: 'expenses', label: 'Gastos', sub: 'Total del mes y quién debe a quién', icon: Wallet, size: 'half' },
-  { id: 'notes', label: 'Notas', sub: 'La nota fijada más reciente', icon: StickyNote, size: 'half' },
+  { id: 'hero', label: 'widget.hero', sub: 'widget.hero.sub', icon: CloudSun, size: 'hero' },
+  { id: 'next', label: 'widget.next', sub: 'widget.next.sub', icon: Sparkles, size: 'next' },
+  { id: 'agenda', label: 'widget.agenda', sub: 'widget.agenda.sub', icon: ListTodo, size: 'wide' },
+  { id: 'menu', label: 'widget.menu', sub: 'widget.menu.sub', icon: UtensilsCrossed, size: 'half' },
+  { id: 'week', label: 'widget.week', sub: 'widget.week.sub', icon: CalendarDays, size: 'full' },
+  { id: 'shopping', label: 'widget.shopping', sub: 'widget.shopping.sub', icon: ShoppingCart, size: 'half' },
+  { id: 'tasks', label: 'widget.tasks', sub: 'widget.tasks.sub', icon: ListChecks, size: 'half' },
+  { id: 'energy', label: 'widget.energy', sub: 'widget.energy.sub', icon: Zap, size: 'half' },
+  { id: 'dates', label: 'widget.dates', sub: 'widget.dates.sub', icon: CalendarClock, size: 'half' },
+  { id: 'expenses', label: 'widget.expenses', sub: 'widget.expenses.sub', icon: Wallet, size: 'half' },
+  { id: 'notes', label: 'widget.notes', sub: 'widget.notes.sub', icon: StickyNote, size: 'half' },
 ];
 
 export const DEFAULT_ORDER = WIDGETS.map((w) => w.id);
 export const widgetMeta = (id: WidgetId) => WIDGETS.find((w) => w.id === id)!;
 
-/** Columnas que ocupa cada tamaño: móvil (fila de 2) y pantalla grande (fila de 3 bloques). */
+/** Columns each size takes: phone (row of 2) and large screen (row of 3 blocks). */
 const UNITS: Record<WidgetSize, { m: number; d: number }> = {
   hero: { m: 2, d: 2 }, wide: { m: 2, d: 2 }, next: { m: 2, d: 1 }, half: { m: 1, d: 1 }, full: { m: 2, d: 3 },
 };
@@ -60,8 +61,8 @@ function packRows(ids: WidgetId[], units: (id: WidgetId) => number, cols: number
 }
 
 /**
- * Anchura de cada tarjeta respetando el orden elegido: si una tarjeta se queda
- * sola al final de una fila, se estira para no dejar huecos.
+ * Width of each card, keeping the chosen order: a card left alone at the end of
+ * a row is stretched so there are no gaps.
  */
 export function packSpans(ids: WidgetId[]) {
   const size = (id: WidgetId) => UNITS[widgetMeta(id).size];
@@ -74,8 +75,8 @@ export interface DashboardPrefs { order?: string[]; hidden?: string[] }
 interface PrefsDoc { id: string; dashboard?: DashboardPrefs }
 
 /**
- * Combina lo guardado con los valores por defecto: ignora ids desconocidos y
- * coloca las tarjetas nuevas (que no estaban al guardar) junto a su vecina por defecto.
+ * Merges saved settings with the defaults: ignores unknown ids and places new
+ * cards (added after the settings were saved) next to their default neighbour.
  */
 export function resolveLayout(prefs?: DashboardPrefs): { order: WidgetId[]; hidden: Set<WidgetId> } {
   const known = new Set<string>(DEFAULT_ORDER);

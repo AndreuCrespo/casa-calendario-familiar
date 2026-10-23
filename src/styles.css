@@ -119,12 +119,12 @@ h1, h2, h3, p { margin: 0; }
   .hide-wide { display: none !important; }
 }
 
-/* ---------- estructura ---------- */
+/* ---------- layout ---------- */
 
 .main {
   max-width: 720px;
   margin: 0 auto;
-  /* Zonas seguras: notch/isla arriba, barra de gestos o botones abajo, notch lateral en horizontal */
+  /* Safe areas: notch/Dynamic Island on top, gesture bar or buttons at the bottom, side notch in landscape */
   padding: calc(var(--safe-t) + 14px) max(16px, env(safe-area-inset-right))
     calc(var(--nav-h) + var(--safe-b) + 28px) max(16px, env(safe-area-inset-left));
 }
@@ -202,7 +202,7 @@ h1, h2, h3, p { margin: 0; }
   .nav-clock span:last-child { color: var(--muted); }
 }
 
-/* ---------- cabeceras ---------- */
+/* ---------- headers ---------- */
 
 .page-head {
   display: flex;
@@ -218,7 +218,7 @@ h1, h2, h3, p { margin: 0; }
   color: var(--muted); margin: 22px 4px 10px; display: flex; align-items: center; gap: 8px;
 }
 
-/* ---------- tarjetas ---------- */
+/* ---------- cards ---------- */
 
 .card {
   background: var(--surface);
@@ -238,7 +238,7 @@ h1, h2, h3, p { margin: 0; }
 .label svg { flex: none; }
 .big-num { font-size: 21px; font-weight: 800; letter-spacing: -.01em; margin-top: 8px; }
 
-/* ---------- botones ---------- */
+/* ---------- buttons ---------- */
 
 .btn {
   display: inline-flex; align-items: center; justify-content: center; gap: 8px;
@@ -285,7 +285,7 @@ h1, h2, h3, p { margin: 0; }
 .fab:active { transform: scale(.94); }
 @media (min-width: 900px) { .fab { bottom: 28px; right: 32px; } }
 
-/* ---------- formularios ---------- */
+/* ---------- forms ---------- */
 
 .field { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
 .field > span { font-size: 12.5px; font-weight: 750; color: var(--text-2); padding-left: 2px; }
@@ -296,7 +296,7 @@ h1, h2, h3, p { margin: 0; }
   border-radius: var(--radius-sm);
   border: 1px solid var(--border);
   background: var(--surface-2);
-  font-size: 16px; /* evita el zoom en iOS */
+  font-size: 16px; /* prevents zoom-on-focus in iOS */
   outline: none;
   transition: border-color .15s, background .15s;
   -webkit-appearance: none;
@@ -381,7 +381,7 @@ h1, h2, h3, p { margin: 0; }
   background: var(--c); color: #fff; font-weight: 800; font-size: 13px;
 }
 
-/* ---------- listas ---------- */
+/* ---------- lists ---------- */
 
 .list { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
 .list-item {
@@ -417,7 +417,7 @@ h1, h2, h3, p { margin: 0; }
 }
 .empty b { color: var(--text); font-size: 16px; }
 
-/* ---------- hoja inferior (modal) ---------- */
+/* ---------- bottom sheet (modal) ---------- */
 
 .sheet-backdrop {
   position: fixed; inset: 0; z-index: 60;
@@ -473,12 +473,12 @@ h1, h2, h3, p { margin: 0; }
 .toast button { color: var(--accent); font-weight: 800; }
 @media (min-width: 900px) { .toast { bottom: 28px; margin-left: calc(var(--rail-w) / 2); } }
 
-/* ---------- inicio ---------- */
+/* ---------- home dashboard ---------- */
 
 .dash { display: grid; gap: 12px; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
 .dash > * { min-width: 0; }
-/* Cada tarjeta va en un contenedor .w; su anchura (m-* en móvil, d-* en pantalla
-   grande) la calcula packSpans() para respetar el orden sin dejar huecos. */
+/* Each card sits in a .w wrapper; its width (m-* on phones, d-* on large screens)
+   comes from packSpans(), which keeps the chosen order without leaving gaps. */
 .w { display: flex; flex-direction: column; min-width: 0; }
 .w > * { flex: 1; }
 .m-1 { grid-column: span 1; }
@@ -584,7 +584,7 @@ h1, h2, h3, p { margin: 0; }
 .mini-bars i.now { outline: 2px solid var(--text); outline-offset: 1px; }
 .mini-bars i.past { opacity: .35; }
 
-/* ---------- calendario ---------- */
+/* ---------- calendar ---------- */
 
 .cal-toolbar { display: flex; align-items: center; gap: 6px; margin-bottom: 12px; }
 .cal-day { margin-bottom: 10px; }
@@ -641,7 +641,7 @@ h1, h2, h3, p { margin: 0; }
 }
 .weekdays button.on { background: var(--text); color: var(--bg); border-color: var(--text); }
 
-/* ---------- compra ---------- */
+/* ---------- shopping ---------- */
 
 .add-bar {
   display: flex; gap: 8px; position: sticky; top: calc(var(--safe-t) + 8px); z-index: 5;
@@ -652,7 +652,7 @@ h1, h2, h3, p { margin: 0; }
 .suggest::-webkit-scrollbar { display: none; }
 .suggest .chip { flex: none; }
 
-/* ---------- menú ---------- */
+/* ---------- meal plan ---------- */
 
 .menu-day { display: grid; grid-template-columns: 54px 1fr; gap: 10px; align-items: start; padding: 12px 14px; border-bottom: 1px solid var(--border); }
 .menu-day:last-child { border-bottom: 0; }
@@ -667,7 +667,7 @@ h1, h2, h3, p { margin: 0; }
 .menu-inputs input:focus { background: var(--surface-2); }
 .menu-inputs input::placeholder { color: var(--border-strong); }
 
-/* ---------- notas ---------- */
+/* ---------- notes ---------- */
 
 .notes { columns: 2; column-gap: 10px; }
 @media (min-width: 900px) { .notes { columns: 3; } }
@@ -686,7 +686,7 @@ h1, h2, h3, p { margin: 0; }
 .swatch { width: 34px; height: 34px; border-radius: 50%; background: var(--sc); border: 2px solid transparent; outline: 1px solid var(--border); }
 .swatch.on { border-color: var(--surface); outline: 2.5px solid var(--text); }
 
-/* ---------- gráficos ---------- */
+/* ---------- charts ---------- */
 
 .chart-wrap { width: 100%; overflow-x: auto; scrollbar-width: none; }
 .chart-wrap svg { display: block; }
@@ -700,7 +700,7 @@ h1, h2, h3, p { margin: 0; }
 .hbar { height: 8px; border-radius: 9px; background: var(--surface-3); overflow: hidden; }
 .hbar i { display: block; height: 100%; border-radius: 9px; background: var(--c, var(--text)); }
 
-/* ---------- más ---------- */
+/* ---------- more ---------- */
 
 .tiles { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 10px; }
 .tile {
@@ -719,7 +719,7 @@ h1, h2, h3, p { margin: 0; }
 }
 .banner svg { color: var(--blue); flex: none; }
 
-/* ---------- login ---------- */
+/* ---------- sign-in screens ---------- */
 
 .auth {
   min-height: 100dvh; display: flex; flex-direction: column; justify-content: center;
@@ -727,6 +727,7 @@ h1, h2, h3, p { margin: 0; }
   gap: 22px;
 }
 .auth-logo { width: 72px; height: 72px; display: block; filter: drop-shadow(0 6px 16px rgba(122, 81, 40, .22)); }
+.auth-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
 .auth h1 { font-size: 30px; font-weight: 800; letter-spacing: -.02em; }
 .divider { display: flex; align-items: center; gap: 12px; color: var(--muted); font-size: 13px; font-weight: 700; }
 .divider::before, .divider::after { content: ''; flex: 1; height: 1px; background: var(--border); }
@@ -740,7 +741,7 @@ h1, h2, h3, p { margin: 0; }
 @keyframes spin { to { transform: rotate(360deg); } }
 .splash { min-height: 100dvh; display: grid; place-items: center; }
 
-/* ---------- agenda y menú (inicio) ---------- */
+/* ---------- agenda and today's meals (home) ---------- */
 
 .agenda-day { margin-top: 12px; }
 .agenda-day + .agenda-day { border-top: 1px solid var(--border); padding-top: 10px; }
@@ -756,7 +757,7 @@ h1, h2, h3, p { margin: 0; }
 .agenda-item.past { opacity: .45; }
 .menu-dish { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; line-height: 1.3; }
 
-/* ---------- personalizar inicio ---------- */
+/* ---------- customize home ---------- */
 
 .dash-editor { overflow: visible; }
 .dash-editor .list-item { position: relative; background: var(--surface); padding-left: 6px; }

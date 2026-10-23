@@ -8,22 +8,23 @@ A shared calendar and household organizer for the whole family. It's a **Progres
   <img src="docs/home-wall-display.jpg" alt="Home screen on a large display, as a wall dashboard" height="520">
 </p>
 
-<sub>Screenshots from demo mode, with sample data. The app's interface is in Spanish: it was built for a family in Spain.</sub>
+<sub>Screenshots from demo mode, with sample data.</sub>
 
 **Stack:** React + Vite (PWA with a service worker) · Firebase Auth, Firestore, Hosting and Cloud Functions · Web Push (VAPID) · [Open-Meteo](https://open-meteo.com) for weather and [REE](https://www.ree.es/es/apidatos) for electricity prices.
 
 ## Features
 
+- **Bilingual**: Spanish and English, switchable in Settings or on the sign-in screens. It starts in the phone's language, and each phone gets its notifications in its own language.
 - **Home dashboard**: clock and weather, "up next" with a countdown, today and tomorrow agenda, today's menu, the week at a glance, plus cards for shopping, chores, electricity, key dates, expenses and notes. **Each person chooses which cards they see and in what order.** On a tablet or desktop it becomes a wall dashboard.
 - **Calendar**: week and month views, one color per family member (kids too), recurring and multi-day events, and reminders.
 - **Shopping list**: shared in real time, with suggestions based on what you buy most and comma-separated quick add.
-- **Chores**: household tasks with an assignee; recurring ones come back automatically when checked off.
+- **Chores**: household tasks with an assignee; recurring ones come back automatically when checked off. Completed one-off chores are deleted after 30 days, or with **Clear completed**.
 - **Meal plan**: lunch and dinner for each day, also shown in the calendar.
 - **Key dates**: birthdays (with age), car inspection, insurance renewals and bills, with a reminder days in advance.
 - **Expenses**: who paid what, who owes whom, and a monthly summary by category.
 - **Notes**: a shared board (guest Wi-Fi, useful phone numbers…).
 - **Weather** and **electricity price**: hourly Spanish regulated tariff (PVPC) and the cheapest hours to run the washing machine.
-- **Push notifications**: what the other person adds arrives instantly ("Sam added to the shopping list: milk, bread and eggs"), plus event reminders, a morning summary and upcoming key dates.
+- **Push notifications**: what the other person adds arrives instantly ("Sam added to the shopping list: milk, bread and eggs"), plus event reminders, a morning summary and upcoming key dates, each in the phone's language.
 
 ---
 
@@ -37,7 +38,7 @@ npm install
 npm run dev
 ```
 
-Open http://localhost:5173 and tap **Probar en modo demo** (try demo mode). Sample data is stored only in that browser. Demo mode is available while Firebase is not configured (no `.env.local`).
+Open http://localhost:5173 and tap **Try demo mode**. Sample data is stored only in that browser. Demo mode is available while Firebase is not configured (no `.env.local`).
 
 To try it on a phone on the same Wi-Fi, open the `Network` address printed by Vite. Under WSL2 that address isn't reachable from other devices by default; run it from Windows or deploy it instead.
 
@@ -105,8 +106,8 @@ https://YOUR-PROJECT.web.app/__/auth/handler
 ### 5. Create your household and invite your partner
 
 1. Sign in and set up the household: your name, your partner's, the kids' and your city.
-2. On the **home screen** (or in **Ajustes → Invitar**, Settings → Invite), tap **Compartir** (share) and send the link.
-3. Your partner opens the link, creates an account, taps **Unirme** (join) and picks their name.
+2. On the **home screen** (or in **Settings → Invite**), tap **Share** and send the link.
+3. Your partner opens the link, creates an account, taps **Join** and picks their name.
 
 > On iPhone the installed app doesn't share storage with Safari: open the invite link in Safari, join there, then add it to the Home Screen and sign in again.
 >
@@ -166,7 +167,7 @@ Both values are saved in `functions/.env.YOUR-PROJECT`, which isn't committed. I
 
 ### d) Enable them on each phone
 
-In the app: **Ajustes → Notificaciones en este móvil** (Settings → notifications on this phone). On iPhone the app must be installed on the Home Screen first, with iOS 16.4 or later.
+In the app: **Settings → Notifications on this phone**. On iPhone the app must be installed on the Home Screen first, with iOS 16.4 or later. Notifications arrive in the language selected on that phone.
 
 ---
 
@@ -198,6 +199,7 @@ In the app: **Ajustes → Notificaciones en este móvil** (Settings → notifica
 ```
 src/
   shared/      Types, dates and recurrence (dependency-free; shared with the functions)
+  i18n/        Spanish and English UI texts (es.ts defines the keys; en.ts must match)
   lib/         Firebase, demo mode, hooks, weather, electricity, push, router, dashboard settings
   components/  Reusable components (sheets, chips, event editor, dashboard editor…)
   pages/       One screen per section
@@ -205,6 +207,7 @@ src/
 functions/
   src/logic.ts   What to notify and when (pure logic)
   src/run.ts     Firestore reads, Web Push delivery and state
+  src/i18n.ts    Notification texts in Spanish and English
   src/index.ts   The two Cloud Functions
 firestore.rules  Security rules: only household members see their data
 ```

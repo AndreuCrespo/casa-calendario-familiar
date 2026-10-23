@@ -1,5 +1,5 @@
-// Utilidades de fechas sin dependencias. Una fecha es 'YYYY-MM-DD' y se
-// opera en UTC para que los cambios de hora no muevan los días.
+// Dependency-free date utilities. A date is 'YYYY-MM-DD' and the math is
+// done in UTC so daylight-saving changes never shift days.
 
 export type DateStr = string;
 
@@ -33,7 +33,7 @@ export function daysInMonth(y: number, m: number): number {
   return new Date(Date.UTC(y, m, 0)).getUTCDate();
 }
 
-/** Suma meses fijando el día (o el último del mes si no existe). */
+/** Adds months keeping the day (or the last day of the month if it doesn't exist). */
 export function addMonthsClamped(d: DateStr, n: number, day?: number): DateStr {
   const p = parts(d);
   const total = p.y * 12 + (p.m - 1) + n;
@@ -46,7 +46,7 @@ export function diffDays(a: DateStr, b: DateStr): number {
   return Math.round((toUTC(a).getTime() - toUTC(b).getTime()) / 86400000);
 }
 
-/** 0 = lunes … 6 = domingo */
+/** 0 = Monday … 6 = Sunday */
 export function weekday(d: DateStr): number {
   return (toUTC(d).getUTCDay() + 6) % 7;
 }
@@ -61,7 +61,7 @@ export function startOfMonth(d: DateStr): DateStr {
 }
 
 export function isoWeek(d: DateStr): number {
-  const dt = toUTC(addDays(d, 3 - weekday(d))); // jueves de esa semana
+  const dt = toUTC(addDays(d, 3 - weekday(d))); // Thursday of that week
   const jan1 = new Date(Date.UTC(dt.getUTCFullYear(), 0, 1));
   return Math.floor((dt.getTime() - jan1.getTime()) / 86400000 / 7) + 1;
 }
@@ -69,7 +69,7 @@ export function isoWeek(d: DateStr): number {
 export function minDate(a: DateStr, b: DateStr) { return a < b ? a : b; }
 export function maxDate(a: DateStr, b: DateStr) { return a > b ? a : b; }
 
-// ---------- zonas horarias ----------
+// ---------- time zones ----------
 
 const fmtCache = new Map<string, Intl.DateTimeFormat>();
 function fmtFor(tz: string) {
@@ -85,7 +85,7 @@ function fmtFor(tz: string) {
   return f;
 }
 
-/** Fecha y hora locales de un instante en la zona dada. */
+/** Local date and time of an instant in the given zone. */
 export function zonedParts(ts: number, tz: string) {
   const p: Record<string, string> = {};
   for (const x of fmtFor(tz).formatToParts(new Date(ts))) p[x.type] = x.value;
@@ -106,21 +106,21 @@ function offsetAt(ts: number, tz: string): number {
 }
 
 /**
- * Convierte fecha+hora locales de la zona a un instante (ms).
- * Como en RFC 5545: una hora repetida (otoño) es la primera de las dos y una
- * hora inexistente (primavera) se adelanta (02:30 → 03:30), en cualquier zona.
+ * Converts a local date+time in the zone to an instant (ms).
+ * As in RFC 5545: a repeated time (autumn) is the first of the two, and a
+ * non-existent time (spring) is moved forward (02:30 → 03:30), in any zone.
  */
 export function zonedToUtc(date: DateStr, time: string, tz: string): number {
   const [y, m, d] = date.split('-').map(Number);
   const [hh, mm] = time.split(':').map(Number);
   const guess = Date.UTC(y, m - 1, d, hh, mm);
-  const before = offsetAt(guess - 86400000, tz); // desfase antes de un posible cambio
+  const before = offsetAt(guess - 86400000, tz); // offset before a possible change
   const tsBefore = guess - before;
   if (offsetAt(tsBefore, tz) === before) return tsBefore;
   const after = offsetAt(guess + 86400000, tz);
   const tsAfter = guess - after;
   if (offsetAt(tsAfter, tz) === after) return tsAfter;
-  return tsBefore; // hueco: con el desfase anterior cae justo después del cambio
+  return tsBefore; // gap: with the earlier offset it lands right after the change
 }
 
 export function todayIn(tz: string, now = Date.now()): DateStr {

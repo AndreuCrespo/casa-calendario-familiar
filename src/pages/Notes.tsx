@@ -1,8 +1,9 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, type CSSProperties } from 'react';
 import { Pin, PinOff, Plus, StickyNote, Trash2 } from 'lucide-react';
 import { useApp, useCollection } from '../lib/app';
 import type { Note } from '../shared/types';
 import { Empty, PageHead, Sheet } from '../components/ui';
+import { t } from '../i18n';
 
 const NOTE_COLORS = ['#FFFCF7', '#FDE9A9', '#FAD4C8', '#D7EEFB', '#D9F2DF', '#E5DEFA', '#F6D9EC'];
 
@@ -16,15 +17,15 @@ export default function Notes() {
 
   return (
     <>
-      <PageHead title="Notas" sub="Tablón compartido" />
+      <PageHead title={t('nav.notes')} sub={t('notes.subtitle')} />
       {notes && notes.length === 0 && (
-        <Empty icon={StickyNote} title="Sin notas">La wifi de invitados, teléfonos útiles, ideas de regalos…</Empty>
+        <Empty icon={StickyNote} title={t('notes.emptyTitle')}>{t('notes.emptyText')}</Empty>
       )}
       <div className="notes">
         {sorted.map((n) => {
           const by = members.find((m) => m.id === n.updatedBy);
           return (
-            <button key={n.id} className="note" style={{ '--nc': n.color } as React.CSSProperties} onClick={() => setEditing(n)}>
+            <button key={n.id} className="note" style={{ '--nc': n.color } as CSSProperties} onClick={() => setEditing(n)}>
               {n.title && <h3>{n.pinned && <Pin size={14} style={{ marginTop: 3, flex: 'none' }} />}{n.title}</h3>}
               <p>{n.body}</p>
               {by && <div className="meta">{by.name}</div>}
@@ -32,7 +33,7 @@ export default function Notes() {
           );
         })}
       </div>
-      <button className="fab" onClick={() => setEditing('new')} aria-label="Nueva nota"><Plus size={28} /></button>
+      <button className="fab" onClick={() => setEditing('new')} aria-label={t('notes.new')}><Plus size={28} /></button>
       {editing && <NoteEditor note={editing === 'new' ? undefined : editing} onClose={() => setEditing(null)} />}
     </>
   );
@@ -55,24 +56,24 @@ function NoteEditor({ note, onClose }: { note?: Note; onClose: () => void }) {
 
   return (
     <Sheet
-      title={note ? 'Nota' : 'Nueva nota'}
+      title={note ? t('notes.note') : t('notes.new')}
       onClose={save}
       footer={<>
-        {note && <button className="btn danger" style={{ flex: 'none' }} onClick={() => { backend.remove('notes', note.id); onClose(); }} aria-label="Borrar"><Trash2 size={20} /></button>}
-        <button className="btn soft" style={{ flex: 'none' }} onClick={() => setPinned(!pinned)} aria-label={pinned ? 'Desfijar' : 'Fijar'}>
+        {note && <button className="btn danger" style={{ flex: 'none' }} onClick={() => { backend.remove('notes', note.id); onClose(); }} aria-label={t('common.delete')}><Trash2 size={20} /></button>}
+        <button className="btn soft" style={{ flex: 'none' }} onClick={() => setPinned(!pinned)} aria-label={pinned ? t('notes.unpin') : t('notes.pin')}>
           {pinned ? <PinOff size={18} /> : <Pin size={18} />}
         </button>
-        <button className="btn accent" onClick={save}>Guardar</button>
+        <button className="btn accent" onClick={save}>{t('common.save')}</button>
       </>}
     >
-      <input className="input" style={{ fontSize: 18, fontWeight: 700, background: color, color: '#2a2620' }} placeholder="Título"
+      <input className="input" style={{ fontSize: 18, fontWeight: 700, background: color, color: '#2a2620' }} placeholder={t('notes.titlePlaceholder')}
         value={title} onChange={(e) => setTitle(e.target.value)} autoFocus={!note} />
       <label className="field">
-        <textarea style={{ minHeight: 180, background: color, color: '#2a2620' }} placeholder="Escribe aquí…" value={body} onChange={(e) => setBody(e.target.value)} />
+        <textarea style={{ minHeight: 180, background: color, color: '#2a2620' }} placeholder={t('notes.bodyPlaceholder')} value={body} onChange={(e) => setBody(e.target.value)} />
       </label>
       <div className="swatches">
         {NOTE_COLORS.map((c) => (
-          <button key={c} className={`swatch${c === color ? ' on' : ''}`} style={{ '--sc': c } as React.CSSProperties} onClick={() => setColor(c)} aria-label="Color" />
+          <button key={c} className={`swatch${c === color ? ' on' : ''}`} style={{ '--sc': c } as CSSProperties} onClick={() => setColor(c)} aria-label={t('common.color')} />
         ))}
       </div>
     </Sheet>

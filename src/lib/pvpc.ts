@@ -1,5 +1,6 @@
-// Precio de la luz PVPC por horas, de la API pública de Red Eléctrica (REE).
+// Hourly PVPC electricity price (Spain's regulated tariff) from Red Eléctrica's public API.
 import { useApp, useNow } from './app';
+import { decimal } from './format';
 import { useRemote } from './remote';
 import { addDays, todayIn, zonedParts } from '../shared/dates';
 
@@ -14,7 +15,7 @@ export async function fetchPvpc(date: string): Promise<PvpcDay | null> {
   });
   const r = await fetch(`https://apidatos.ree.es/es/datos/mercados/precios-mercados-tiempo-real?${q}`);
   if (!r.ok) {
-    if (r.status === 404 || r.status === 500) return null; // aún no publicado
+    if (r.status === 404 || r.status === 500) return null; // not published yet
     throw new Error(`REE ${r.status}`);
   }
   const j = await r.json();
@@ -35,7 +36,7 @@ export function usePvpc() {
   const today = todayIn(tz, now);
   const hour = zonedParts(now, tz).hour;
   const todayData = useRemote(`pvpc:${today}`, () => fetchPvpc(today), 6 * 3600_000);
-  // Los precios de mañana se publican sobre las 20:15
+  // Tomorrow's prices are published around 20:15
   const tomorrow = addDays(today, 1);
   const tomorrowData = useRemote(hour >= 20 ? `pvpc:${tomorrow}:v${hour}` : null, () => fetchPvpc(tomorrow), 3600_000);
   return { today, hour, data: todayData.data ?? null, loading: todayData.loading, error: todayData.error, tomorrow: tomorrowData.data ?? null };
@@ -56,7 +57,7 @@ export function priceLevel(price: number, s: { p33: number; p66: number }): 'low
   return price <= s.p33 ? 'low' : price <= s.p66 ? 'mid' : 'high';
 }
 
-/** Ventana de `len` horas consecutivas más barata desde `fromHour`. */
+/** Cheapest window of `len` consecutive hours starting at or after `fromHour`. */
 export function cheapestWindow(day: PvpcDay, len: number, fromHour = 0) {
   const hs = day.hours.filter((h) => h.hour >= fromHour);
   let best: { start: number; avg: number } | null = null;
@@ -67,4 +68,4 @@ export function cheapestWindow(day: PvpcDay, len: number, fromHour = 0) {
   return best;
 }
 
-export const kwh = (p: number) => `${p.toFixed(3).replace('.', ',')} €/kWh`;
+export const kwh = (p: number) => `${decimal(p, 3)} €/kWh`;

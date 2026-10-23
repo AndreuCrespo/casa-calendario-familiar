@@ -4,10 +4,10 @@ dev-dist
 .firebase
 *.log
 
-# Configuración local de herramientas
+# Local tool settings
 .claude/
 
-# Credenciales: nunca al repositorio
+# Credentials: never in the repository
 .env
 .env.*
 !.env.example
@@ -16,5 +16,5 @@ service-account*.json
 *.pem
 *.key
 
-# Proyecto de Firebase de cada uno (firebase use --add)
+# Everyone's own Firebase project (firebase use --add)
 .firebaserc

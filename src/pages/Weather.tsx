@@ -1,6 +1,7 @@
 import { Droplets, MapPin, Sunrise, Sunset, Wind } from 'lucide-react';
 import { useApp, useNow } from '../lib/app';
-import { DOW } from '../lib/format';
+import { dow } from '../lib/format';
+import { t } from '../i18n';
 import { href } from '../lib/router';
 import { useWeather, weatherLabel, type Weather } from '../lib/weather';
 import { weekday, zonedParts } from '../shared/dates';
@@ -13,9 +14,9 @@ export default function WeatherPage() {
   if (!household.location) {
     return (
       <>
-        <PageHead title="Tiempo" />
+        <PageHead title={t('nav.weather')} />
         <div className="card">
-          <p>Elige tu ciudad en <a href={href('ajustes')} style={{ color: 'var(--accent)', fontWeight: 700 }}>Ajustes</a> para ver la previsión.</p>
+          <p>{t('weather.pickCity1')} <a href={href('settings')} style={{ color: 'var(--accent)', fontWeight: 700 }}>{t('nav.settings')}</a> {t('weather.pickCity2')}</p>
         </div>
       </>
     );
@@ -23,23 +24,23 @@ export default function WeatherPage() {
   if (!w.data) {
     return (
       <>
-        <PageHead title="Tiempo" sub={household.location.name} />
-        <div className="center" style={{ padding: 40 }}>{w.error ? <p className="error">No se pudo cargar el tiempo</p> : <Spinner />}</div>
+        <PageHead title={t('nav.weather')} sub={household.location.name} />
+        <div className="center" style={{ padding: 40 }}>{w.error ? <p className="error">{t('weather.loadError')}</p> : <Spinner />}</div>
       </>
     );
   }
   const d = w.data;
   return (
     <>
-      <PageHead title="Tiempo" sub={<span className="row" style={{ gap: 4 }}><MapPin size={13} />{household.location.name}</span>} />
+      <PageHead title={t('nav.weather')} sub={<span className="row" style={{ gap: 4 }}><MapPin size={13} />{household.location.name}</span>} />
       <Current w={d} />
-      <div className="section-title">Próximas 24 horas</div>
+      <div className="section-title">{t('weather.next24')}</div>
       <HourlyChart w={d} />
-      <div className="section-title">Próximos días</div>
+      <div className="section-title">{t('weather.nextDays')}</div>
       <div className="list">
         {d.daily.date.map((date, i) => (
           <div key={date} className="list-item">
-            <div style={{ width: 54 }} className="bold">{i === 0 ? 'Hoy' : DOW[weekday(date)]}</div>
+            <div style={{ width: 54 }} className="bold">{i === 0 ? t('date.today') : dow()[weekday(date)]}</div>
             <WeatherIcon code={d.daily.code[i]} size={24} />
             <div className="grow small muted">{weatherLabel(d.daily.code[i])}</div>
             <span className="tiny num" style={{ color: 'var(--blue)', fontWeight: 700, width: 42, textAlign: 'right' }}>
@@ -63,14 +64,14 @@ function Current({ w }: { w: Weather }) {
         <WeatherIcon code={w.current.code} isDay={w.current.isDay} size={64} />
         <div className="grow">
           <div className="hero-clock num" style={{ fontSize: 64 }}>{Math.round(w.current.temp)}°</div>
-          <div className="hero-date">{weatherLabel(w.current.code)} · Máx {Math.round(w.daily.max[di])}° · Mín {Math.round(w.daily.min[di])}°</div>
+          <div className="hero-date">{weatherLabel(w.current.code)} · {t('weather.max')} {Math.round(w.daily.max[di])}° · {t('weather.min')} {Math.round(w.daily.min[di])}°</div>
         </div>
       </div>
       <div className="hero-days" style={{ gridTemplateColumns: 'repeat(4, 1fr)' }}>
-        <div className="hero-day"><Droplets size={18} /><span>{w.daily.pop[di] ?? 0}%</span><span className="mn">lluvia</span></div>
-        <div className="hero-day"><Wind size={18} /><span>{Math.round(w.current.wind)} km/h</span><span className="mn">viento</span></div>
-        <div className="hero-day"><Sunrise size={18} /><span>{w.daily.sunrise[di]?.slice(11, 16)}</span><span className="mn">amanece</span></div>
-        <div className="hero-day"><Sunset size={18} /><span>{w.daily.sunset[di]?.slice(11, 16)}</span><span className="mn">anochece</span></div>
+        <div className="hero-day"><Droplets size={18} /><span>{w.daily.pop[di] ?? 0}%</span><span className="mn">{t('weather.rain')}</span></div>
+        <div className="hero-day"><Wind size={18} /><span>{Math.round(w.current.wind)} km/h</span><span className="mn">{t('weather.wind')}</span></div>
+        <div className="hero-day"><Sunrise size={18} /><span>{w.daily.sunrise[di]?.slice(11, 16)}</span><span className="mn">{t('weather.sunrise')}</span></div>
+        <div className="hero-day"><Sunset size={18} /><span>{w.daily.sunset[di]?.slice(11, 16)}</span><span className="mn">{t('weather.sunset')}</span></div>
       </div>
     </section>
   );
@@ -105,7 +106,7 @@ function HourlyChart({ w }: { w: Weather }) {
   return (
     <div className="card" style={{ padding: '12px 0' }}>
       <div className="chart-wrap">
-        <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} role="img" aria-label="Temperatura por horas">
+        <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} role="img" aria-label={t('weather.hourlyChart')}>
           <defs>
             <linearGradient id="tg" x1="0" x2="0" y1="0" y2="1">
               <stop offset="0" stopColor="#F5B638" stopOpacity=".35" />
@@ -125,7 +126,7 @@ function HourlyChart({ w }: { w: Weather }) {
                 <text x={x(k)} y={bottom + 24} textAnchor="middle" fontSize="10.5" fontWeight="700" fill="var(--blue)">{w.hourly.pop[i]}%</text>
               )}
               <text x={x(k)} y={H - 6} textAnchor="middle" fontSize="11" fontWeight="700" fill="var(--muted)">
-                {k === 0 ? 'Ahora' : w.hourly.time[i].slice(11, 13)}
+                {k === 0 ? t('next.now') : w.hourly.time[i].slice(11, 13)}
               </text>
             </g>
           ))}

@@ -1,15 +1,21 @@
-// Router mínimo por hash: #/calendario, #/compra, …
+// Minimal hash router: #/calendar, #/shopping, …
 import { useEffect, useState } from 'react';
 
 export type Route =
-  | 'inicio' | 'calendario' | 'compra' | 'tareas' | 'mas'
-  | 'menu' | 'gastos' | 'notas' | 'fechas' | 'tiempo' | 'luz' | 'ajustes';
+  | 'home' | 'calendar' | 'shopping' | 'tasks' | 'more'
+  | 'menu' | 'expenses' | 'notes' | 'dates' | 'weather' | 'energy' | 'settings';
 
-const ROUTES: Route[] = ['inicio', 'calendario', 'compra', 'tareas', 'mas', 'menu', 'gastos', 'notas', 'fechas', 'tiempo', 'luz', 'ajustes'];
+const ROUTES: Route[] = ['home', 'calendar', 'shopping', 'tasks', 'more', 'menu', 'expenses', 'notes', 'dates', 'weather', 'energy', 'settings'];
+
+/** Spanish routes from earlier versions (old links and notifications keep working). */
+const LEGACY: Record<string, Route> = {
+  inicio: 'home', calendario: 'calendar', compra: 'shopping', tareas: 'tasks', mas: 'more',
+  gastos: 'expenses', notas: 'notes', fechas: 'dates', tiempo: 'weather', luz: 'energy', ajustes: 'settings',
+};
 
 function parse(): { route: Route; param: string | null } {
   const [, seg = '', param = null] = location.hash.replace(/^#/, '').split('/');
-  const route = (ROUTES as string[]).includes(seg) ? (seg as Route) : 'inicio';
+  const route = (ROUTES as string[]).includes(seg) ? (seg as Route) : LEGACY[seg] ?? 'home';
   return { route, param };
 }
 
@@ -23,10 +29,6 @@ export function useRoute() {
   return r;
 }
 
-export function go(route: Route, param?: string) {
-  location.hash = `/${route === 'inicio' ? '' : route}${param ? `/${param}` : ''}`;
-}
-
 export function href(route: Route, param?: string) {
-  return `#/${route === 'inicio' ? '' : route}${param ? `/${param}` : ''}`;
+  return `#/${route === 'home' ? '' : route}${param ? `/${param}` : ''}`;
 }
