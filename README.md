@@ -1,33 +1,33 @@
-# Casa 🏠 · calendario familiar compartido
+# Casa 🏠 · family hub PWA
 
-Calendario compartido y cosas de casa para la familia. Es una **PWA**: se instala desde el navegador en Android y en iPhone, sin tiendas de apps y sin pagar la cuenta de Apple Developer. Los cambios llegan al momento al móvil del resto de la familia.
+A shared calendar and household organizer for the whole family. It's a **Progressive Web App**: it installs from the browser on Android and iPhone, with no app stores and no paid Apple Developer account. Changes show up instantly on everyone's phone.
 
 <p align="center">
-  <img src="docs/inicio-movil.jpg" alt="Inicio en el móvil" height="520">
+  <img src="docs/home-mobile.jpg" alt="Home screen on a phone" height="520">
   &nbsp;
-  <img src="docs/inicio-pantalla.jpg" alt="Inicio en pantalla grande, como panel de pared" height="520">
+  <img src="docs/home-wall-display.jpg" alt="Home screen on a large display, as a wall dashboard" height="520">
 </p>
 
-<sub>Capturas del modo demo, con datos ficticios.</sub>
+<sub>Screenshots from demo mode, with sample data. The app's interface is in Spanish: it was built for a family in Spain.</sub>
 
-**Tecnología:** React + Vite (PWA con service worker) · Firebase Auth, Firestore, Hosting y Cloud Functions · Web Push (VAPID) · [Open-Meteo](https://open-meteo.com) y [REE](https://www.ree.es/es/apidatos) para el tiempo y la luz.
+**Stack:** React + Vite (PWA with a service worker) · Firebase Auth, Firestore, Hosting and Cloud Functions · Web Push (VAPID) · [Open-Meteo](https://open-meteo.com) for weather and [REE](https://www.ree.es/es/apidatos) for electricity prices.
 
-## Qué tiene
+## Features
 
-- **Inicio**: cuadro de mando con reloj, el tiempo, «lo próximo» con cuenta atrás, agenda de hoy y mañana, menú de hoy, la semana de un vistazo y tarjetas de compra, tareas, luz, fechas, gastos y notas. **Cada persona elige qué tarjetas ve y en qué orden** (Personalizar inicio). En una tablet u ordenador se ve como un panel de pared.
-- **Calendario**: vista de semana y de mes, un color por persona (también para las peques), eventos que se repiten, eventos de varios días y avisos.
-- **Compra**: lista compartida en tiempo real, sugerencias de lo que más compráis y varias cosas a la vez separadas por comas.
-- **Tareas**: tareas de casa con responsable; las que se repiten vuelven solas al marcarlas.
-- **Menú**: comida y cena de cada día; aparecen también en el calendario.
-- **Fechas**: cumpleaños (con la edad), ITV, seguros y recibos, con aviso unos días antes.
-- **Gastos**: quién ha pagado qué, quién debe a quién y resumen del mes por categorías.
-- **Notas**: tablón compartido (wifi de invitados, teléfonos…).
-- **Tiempo** ([Open-Meteo](https://open-meteo.com)) y **luz**: precio PVPC por horas ([REE](https://www.ree.es/es/apidatos)) y las horas más baratas para la lavadora.
-- **Notificaciones push**: lo que añade el otro llega al momento («Sam ha añadido a la compra: leche, pan y huevos»), además de recordatorios de eventos, resumen por la mañana y vencimientos.
+- **Home dashboard**: clock and weather, "up next" with a countdown, today and tomorrow agenda, today's menu, the week at a glance, plus cards for shopping, chores, electricity, key dates, expenses and notes. **Each person chooses which cards they see and in what order.** On a tablet or desktop it becomes a wall dashboard.
+- **Calendar**: week and month views, one color per family member (kids too), recurring and multi-day events, and reminders.
+- **Shopping list**: shared in real time, with suggestions based on what you buy most and comma-separated quick add.
+- **Chores**: household tasks with an assignee; recurring ones come back automatically when checked off.
+- **Meal plan**: lunch and dinner for each day, also shown in the calendar.
+- **Key dates**: birthdays (with age), car inspection, insurance renewals and bills, with a reminder days in advance.
+- **Expenses**: who paid what, who owes whom, and a monthly summary by category.
+- **Notes**: a shared board (guest Wi-Fi, useful phone numbers…).
+- **Weather** and **electricity price**: hourly Spanish regulated tariff (PVPC) and the cheapest hours to run the washing machine.
+- **Push notifications**: what the other person adds arrives instantly ("Sam added to the shopping list: milk, bread and eggs"), plus event reminders, a morning summary and upcoming key dates.
 
 ---
 
-## Probarla ya (modo demo)
+## Try it now (demo mode)
 
 ```bash
 npm install
@@ -37,31 +37,33 @@ npm install
 npm run dev
 ```
 
-Abre http://localhost:5173 y pulsa **Probar en modo demo**. Los datos de ejemplo se guardan solo en ese navegador. Desde el móvil, en la misma wifi, abre la dirección `Network` que muestra la consola.
+Open http://localhost:5173 and tap **Probar en modo demo** (try demo mode). Sample data is stored only in that browser. Demo mode is available while Firebase is not configured (no `.env.local`).
+
+To try it on a phone on the same Wi-Fi, open the `Network` address printed by Vite. Under WSL2 that address isn't reachable from other devices by default; run it from Windows or deploy it instead.
 
 ---
 
-## Puesta en marcha
+## Setup
 
-### 1. Crear el proyecto de Firebase
+### 1. Create the Firebase project
 
-1. Entra en <https://console.firebase.google.com> → **Crear proyecto** (por ejemplo `casa-familia`). Google Analytics no hace falta.
-2. **Authentication** → *Comenzar* → *Método de inicio de sesión*: activa **Correo electrónico/contraseña** y **Google**.
-3. **Firestore Database** → *Crear base de datos* → ubicación **`europe-southwest1` (Madrid)** → modo **producción**.
-   > Si eliges otra ubicación, cambia `FIRESTORE_REGION` en [`functions/src/index.ts`](functions/src/index.ts): la función que avisa al momento tiene que estar en la misma región que la base de datos.
-4. **Configuración del proyecto** (rueda dentada) → *Tus apps* → icono **`</>`** (web) → registra la app «Casa». Copia los valores de `firebaseConfig`.
-5. En la carpeta del proyecto, copia `.env.example` como `.env.local` y pega esos valores:
+1. Go to <https://console.firebase.google.com> → **Create project**. Google Analytics isn't needed.
+2. **Authentication** → *Get started* → *Sign-in method*: enable **Email/Password** and **Google**.
+3. **Firestore Database** → *Create database* → **Standard** edition, `(default)` ID → location **`europe-southwest1` (Madrid)** → **production mode**.
+   > If you pick another location, update `FIRESTORE_REGION` in [`functions/src/index.ts`](functions/src/index.ts): the instant-notification function must run in the same region as the database.
+4. **Project settings** (gear icon) → *Your apps* → **`</>`** (web) → register the app. Copy the `firebaseConfig` values.
+5. In the project folder, copy `.env.example` to `.env.local` and fill in those values:
 
    ```
    VITE_FIREBASE_API_KEY=AIza...
-   VITE_FIREBASE_AUTH_DOMAIN=casa-familia.web.app
-   VITE_FIREBASE_PROJECT_ID=casa-familia
+   VITE_FIREBASE_AUTH_DOMAIN=your-project.web.app
+   VITE_FIREBASE_PROJECT_ID=your-project
    ...
    ```
 
-   > En `AUTH_DOMAIN` pon `TU-PROYECTO.web.app` y no el `firebaseapp.com` que te propone Firebase. Así el login con Google funciona dentro de la app instalada en el iPhone. Mira el paso 3.
+   > Set `AUTH_DOMAIN` to `YOUR-PROJECT.web.app`, not the `firebaseapp.com` domain Firebase suggests. That keeps Google sign-in working inside the app installed on an iPhone. See step 3.
 
-### 2. Publicarla (Firebase Hosting)
+### 2. Deploy it (Firebase Hosting)
 
 ```bash
 npm install -g firebase-tools
@@ -71,62 +73,64 @@ npm install -g firebase-tools
 firebase login --no-localhost
 ```
 
-(`--no-localhost` te da un código para pegar en la terminal; desde WSL el inicio de sesión normal a veces no vuelve a la terminal)
+(`--no-localhost` gives you a code to paste into the terminal; from WSL the regular browser login sometimes never returns to the terminal)
 
 ```bash
 firebase use --add
 ```
 
-(elige tu proyecto y ponle el alias `default`)
+(pick your project and give it the alias `default`)
 
 ```bash
 npm run deploy:web
 ```
 
-El último comando compila la app y sube la web y las reglas de seguridad de Firestore (`firestore.rules`). La app queda en **https://TU-PROYECTO.web.app**. Las notificaciones se activan después (más abajo).
+That builds the app and deploys the website and the Firestore security rules (`firestore.rules`). The app is then live at **https://YOUR-PROJECT.web.app**. Notifications come later (see below).
 
-### 3. Login con Google en el iPhone (recomendado)
+### 3. Google sign-in on iPhone (recommended)
 
-Si solo vais a entrar con email y contraseña, puedes saltarte este paso.
+Skip this if everyone signs in with email and password.
 
-En <https://console.cloud.google.com> (mismo proyecto) → *APIs y servicios* → *Credenciales* → *Web client (auto created by Google Service)* → en **URIs de redireccionamiento autorizados** añade:
+In <https://console.cloud.google.com> (same project) → *APIs & Services* → *Credentials* → *Web client (auto created by Google Service)* → under **Authorized redirect URIs**, keep the existing URI and add:
 
 ```
-https://TU-PROYECTO.web.app/__/auth/handler
+https://YOUR-PROJECT.web.app/__/auth/handler
 ```
 
-### 4. Instalarla en los móviles
+### 4. Install it on the phones
 
-- **Android (Chrome)**: abre la web → menú ⋮ → **Instalar aplicación**.
-- **iPhone (Safari)**: abre la web → botón **Compartir** → **Añadir a pantalla de inicio**. Ábrela siempre desde ese icono: las notificaciones solo funcionan así.
+- **Android (Chrome)**: open the site → ⋮ menu → **Install app**.
+- **iPhone (Safari)**: open the site → **Share** → **Add to Home Screen**. Always open it from that icon: notifications only work there.
 
-### 5. Crear la casa e invitar a tu pareja
+### 5. Create your household and invite your partner
 
-1. Entra con tu cuenta y rellena la casa: tu nombre, el de tu pareja, las peques y vuestra ciudad.
-2. En **Inicio** (o en **Ajustes → Invitar**) pulsa **Compartir** y envía el enlace por WhatsApp.
-3. Tu pareja abre el enlace, crea su cuenta, pulsa **Unirme** y elige quién es.
+1. Sign in and set up the household: your name, your partner's, the kids' and your city.
+2. On the **home screen** (or in **Ajustes → Invitar**, Settings → Invite), tap **Compartir** (share) and send the link.
+3. Your partner opens the link, creates an account, taps **Unirme** (join) and picks their name.
 
-> El enlace de invitación contiene el identificador secreto de la casa. Compártelo solo con quien quieras que entre.
+> On iPhone the installed app doesn't share storage with Safari: open the invite link in Safari, join there, then add it to the Home Screen and sign in again.
+>
+> The invite link contains the household's secret ID. Only share it with people who should join.
 
 ---
 
-## Notificaciones push (Cloud Functions)
+## Push notifications (Cloud Functions)
 
-Las envían dos funciones de [`functions/`](functions/), que se despliegan en el mismo proyecto de Firebase:
+Two functions in [`functions/`](functions/), deployed to the same Firebase project, send them:
 
-| Función | Cuándo | Qué avisa |
+| Function | When | What |
 |---|---|---|
-| `onActivityCreated` | Al momento, cuando alguien añade algo | «Sam ha añadido a la compra: leche, pan y huevos». Lo que se añade seguido llega en un solo aviso, y solo al móvil del otro |
-| `notificationsTick` | Cada 5 minutos | Recordatorios de eventos, resumen de la mañana (8:00 por defecto) y fechas clave |
+| `onActivityCreated` | Instantly, when someone adds something | "Sam added to the shopping list: milk, bread and eggs". Bursts are grouped into one notification, sent only to the other people's phones |
+| `notificationsTick` | Every 5 minutes | Event reminders, the morning summary (8:00 by default) and key dates |
 
-### a) Activar el plan Blaze y poner un tope
+### a) Switch to the Blaze plan and set a budget alert
 
-Las Cloud Functions necesitan el plan **Blaze** (pago por uso). Para una familia el consumo cabe en la capa gratuita y la factura esperada es **0 €**, pero conviene poner una alerta:
+Cloud Functions need the **Blaze** (pay-as-you-go) plan. A family's usage fits in the free tier and the expected bill is **€0**, but set an alert anyway:
 
-1. Consola de Firebase → abajo a la izquierda, **Spark → Actualizar** → **Blaze** y vincula una forma de pago (sirve la misma cuenta de Google).
-2. Al activarlo, Firebase propone crear un **presupuesto**: pon **1 €** para recibir un correo si algo se dispara.
+1. Firebase console → bottom left, **Spark → Upgrade** → **Blaze**, and link a payment method.
+2. When asked for a **budget**, enter **€1** to get an email if anything spikes.
 
-### b) Claves VAPID
+### b) VAPID keys
 
 ```bash
 npm --prefix functions install
@@ -136,86 +140,86 @@ npm --prefix functions install
 npm --prefix functions run vapid
 ```
 
-- La clave **pública** va en `.env.local` como `VITE_VAPID_PUBLIC_KEY` (la usa la app) y te la pedirá también el primer despliegue.
-- La **privada** se guarda como secreto en Google Cloud (Secret Manager) con el comando siguiente, que te pedirá pegarla. No la guardes en ningún archivo:
+- The **public** key goes in `.env.local` as `VITE_VAPID_PUBLIC_KEY` (the app uses it). The first deployment will also ask for it.
+- The **private** key is stored as a secret in Google Cloud (Secret Manager) with this command, which asks you to paste it. Don't save it in any file in the repo:
 
 ```bash
 firebase functions:secrets:set VAPID_PRIVATE_KEY
 ```
 
-### c) Desplegar todo
+### c) Deploy everything
 
 ```bash
 npm run deploy
 ```
 
-La primera vez te preguntará:
+It deploys the website and rules first and then the functions, so a function error never blocks a website release. The first time it asks for:
 
-- `VAPID_PUBLIC_KEY`: la clave pública del paso b.
-- `VAPID_SUBJECT`: tu contacto, por ejemplo `mailto:tu-correo@ejemplo.com`.
+- `VAPID_PUBLIC_KEY`: the public key from step b.
+- `VAPID_SUBJECT`: a contact for the push services, such as `mailto:you@example.com` or your app's `https://` URL.
 
-Esos dos valores se guardan en `functions/.env.TU-PROYECTO`, que no se sube al repositorio. Si te pregunta cuántos días guardar las imágenes de las funciones, responde **1** para no ocupar almacenamiento.
+Both values are saved in `functions/.env.YOUR-PROJECT`, which isn't committed. If it asks how many days to keep function container images, answer **1** to avoid storage charges.
 
-> Es normal que el primer despliegue de la función que reacciona a Firestore falle con un error de permisos de *Eventarc*: Google tarda unos minutos en preparar sus permisos. Espera 5 minutos y repite `npm run deploy`.
+> The first deployment of the Firestore-triggered function often fails with an *Eventarc* permission error: Google needs a few minutes to provision permissions. Wait 5 minutes and run `npm run deploy` again.
 >
-> `npm run deploy` ya amplía a 120 s el tiempo que la CLI tiene para analizar las funciones (`FUNCTIONS_DISCOVERY_TIMEOUT`). Los 10 s por defecto no bastan desde WSL con el proyecto en `/mnt/…`, porque leer `node_modules` en el disco de Windows es lento (error *User code failed to load … Timeout after 10000*).
+> `npm run deploy` gives the CLI 120 s (`FUNCTIONS_DISCOVERY_TIMEOUT`) to analyze the functions. The default 10 s isn't enough from WSL with the project under `/mnt/…`, because reading `node_modules` from the Windows drive is slow (error *User code failed to load … Timeout after 10000*).
 
-### d) Activarlas en cada móvil
+### d) Enable them on each phone
 
-En la app: **Ajustes → Notificaciones en este móvil**. En el iPhone, primero tiene que estar instalada en la pantalla de inicio.
+In the app: **Ajustes → Notificaciones en este móvil** (Settings → notifications on this phone). On iPhone the app must be installed on the Home Screen first, with iOS 16.4 or later.
 
 ---
 
-## Costes
+## Costs
 
-| Servicio | Plan | Para una familia |
+| Service | Plan | For a family |
 |---|---|---|
-| Firebase Auth, Firestore y Hosting | Gratis (también dentro de Blaze) | Muy por debajo de los límites (50.000 lecturas de Firestore al día; la tarea cada 5 minutos usa unas 10.000) |
-| Cloud Functions y Cloud Scheduler | Blaze | Dentro de la capa gratuita: 2 millones de invocaciones al mes y 3 tareas programadas gratis |
-| Secret Manager | Blaze | 1 secreto, dentro de lo gratuito |
-| Open-Meteo y REE | APIs públicas | Sin clave y sin coste |
+| Firebase Auth, Firestore and Hosting | Free (also within Blaze) | Far below the limits (50,000 Firestore reads per day; the 5-minute task uses about 10,000) |
+| Cloud Functions and Cloud Scheduler | Blaze | Within the free tier: 2 million invocations per month and 3 free scheduled jobs |
+| Secret Manager | Blaze | 1 secret, within the free tier |
+| Open-Meteo and REE | Public APIs | No key, no cost |
 
 ---
 
-## Seguridad y privacidad
+## Security and privacy
 
-- En el repositorio **no hay credenciales**:
-  - La configuración de Firebase va en `.env.local`.
-  - La clave privada VAPID está en Secret Manager.
-  - Las funciones usan la identidad propia del proyecto, sin descargar claves de cuenta de servicio.
-  - El `.gitignore` bloquea `.env*`, `*firebase-adminsdk*.json`, `*.pem` y `*.key`.
-- La configuración web de Firebase (`VITE_FIREBASE_*`) no es secreta, porque acaba en el JavaScript que descarga cualquier navegador. Lo que protege los datos son las [reglas de Firestore](firestore.rules): solo los miembros de una casa pueden leerla o modificarla.
-- Los registros de las funciones solo guardan identificadores y recuentos, nunca el texto de vuestros eventos o notas.
+- **No credentials in the repository**:
+  - The Firebase config lives in `.env.local`.
+  - The VAPID private key lives in Secret Manager.
+  - The functions use the project's own identity; no service account keys are downloaded.
+  - `.gitignore` blocks `.env*`, `*firebase-adminsdk*.json`, `*.pem` and `*.key`.
+- The Firebase web config (`VITE_FIREBASE_*`) isn't secret: it ends up in the JavaScript every browser downloads. What protects the data are the [Firestore rules](firestore.rules): only members of a household can read or change it.
+- Function logs only contain IDs and counts, never the text of your events or notes.
 
 ---
 
-## Desarrollo
+## Development
 
 ```
 src/
-  shared/      Tipos, fechas y repeticiones (sin dependencias; también los usan las funciones)
-  lib/         Firebase, modo demo, hooks, tiempo, luz, push, router, configuración del inicio
-  components/  Componentes reutilizables (hojas, chips, editor de eventos, personalizar inicio…)
-  pages/       Una pantalla por sección
-  sw.ts        Service worker (offline y notificaciones)
+  shared/      Types, dates and recurrence (dependency-free; shared with the functions)
+  lib/         Firebase, demo mode, hooks, weather, electricity, push, router, dashboard settings
+  components/  Reusable components (sheets, chips, event editor, dashboard editor…)
+  pages/       One screen per section
+  sw.ts        Service worker (offline support and notifications)
 functions/
-  src/logic.ts   Qué avisar y cuándo (lógica pura)
-  src/run.ts     Lectura de Firestore, envío Web Push y estado
-  src/index.ts   Las dos Cloud Functions
-firestore.rules  Reglas de seguridad: solo los miembros de la casa ven sus datos
+  src/logic.ts   What to notify and when (pure logic)
+  src/run.ts     Firestore reads, Web Push delivery and state
+  src/index.ts   The two Cloud Functions
+firestore.rules  Security rules: only household members see their data
 ```
 
-- `npm run dev`: servidor local.
-- `npm run build`: comprobación de tipos y compilación.
-- `npm run deploy:web`: publica la web y las reglas.
-- `npm run deploy`: publica todo, funciones incluidas (necesita Blaze).
-- `npm --prefix functions test`: tests de las notificaciones (lógica, cambios de hora y un Firestore simulado).
-- `npm run icons`: regenera los iconos (PNG y `favicon.ico`) a partir de `public/favicon.svg` y `assets/icon-full.svg`.
+- `npm run dev`: local dev server.
+- `npm run build`: type-check and production build.
+- `npm run deploy:web`: deploy the website and rules.
+- `npm run deploy`: deploy everything, functions included (needs Blaze).
+- `npm --prefix functions test`: notification tests (logic, daylight-saving edge cases and an in-memory Firestore).
+- `npm run icons`: regenerate the icons (PNG and `favicon.ico`) from `public/favicon.svg` and `assets/icon-full.svg`.
 
-> **WSL o Windows, pero no los dos.** `node_modules` lleva binarios nativos del sistema que hizo `npm install` (Rolldown, TypeScript, esbuild). Este proyecto está instalado desde **WSL**. Si un día lo usas desde PowerShell, borra `node_modules` y `functions/node_modules` y reinstala allí. Con el proyecto en `/mnt/d/...`, Vite vigila los archivos por sondeo para notar también los cambios hechos desde Windows (ya está configurado en `vite.config.ts`).
+> **WSL or Windows, not both.** `node_modules` contains native binaries for the system that ran `npm install` (Rolldown, TypeScript, esbuild). This project is installed from **WSL**. To use it from PowerShell, delete `node_modules` and `functions/node_modules` and reinstall there. With the project under `/mnt/d/...`, Vite polls for file changes so edits made from Windows are picked up too (already set in `vite.config.ts`).
 
-## Ideas para más adelante
+## Ideas for later
 
-- Pantalla de pared: una tablet barata o un marco de fotos «hackeado» (como el de Wes Bos) con la app abierta. La vista ancha ya está pensada para eso.
-- Exportar el calendario como iCal para verlo en el calendario nativo del iPhone o de Google.
-- Turnos de trabajo con patrones que se rellenen solos.
+- Wall display: a cheap tablet or a "hacked" digital photo frame (like Wes Bos's) running the app. The wide layout is already designed for it.
+- Export the calendar as iCal to see it in the phone's native calendar.
+- Work shifts with repeating patterns that fill themselves in.
