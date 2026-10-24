@@ -1,0 +1,67 @@
+.notes {
+  columns: 2;
+  column-gap: 10px;
+}
+@media (min-width: 900px) {
+  .notes {
+    columns: 3;
+  }
+}
+.notes > li {
+  break-inside: avoid;
+  margin-bottom: 10px;
+}
+.note {
+  display: block;
+  width: 100%;
+  text-align: left;
+  border-radius: 18px;
+  padding: 14px;
+  background: var(--nc, var(--surface));
+  border: 1px solid color-mix(in srgb, var(--text) 7%, transparent);
+  color: var(--note-ink);
+}
+.note-title {
+  font-size: 15.5px;
+  font-weight: 800;
+  margin-bottom: 6px;
+  display: flex;
+  gap: 6px;
+  align-items: flex-start;
+}
+.note-title svg {
+  margin-top: 3px;
+  flex: none;
+}
+.note-body {
+  display: block;
+  font-size: 14px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  line-height: 1.45;
+  color: var(--note-ink-2);
+}
+.note-meta {
+  display: block;
+  font-size: 11.5px;
+  color: var(--note-ink-3);
+  margin-top: 10px;
+  font-weight: 650;
+}
+
+/* Editor fields look like the note itself */
+.note-paper {
+  background: var(--nc);
+  color: var(--note-ink);
+}
+.note-paper:focus {
+  background: var(--nc);
+}
+.note-text {
+  min-height: 180px;
+}
+
+:root[data-theme='dark'] .note,
+:root[data-theme='dark'] .note-paper {
+  filter: brightness(0.82) saturate(0.9);
+}

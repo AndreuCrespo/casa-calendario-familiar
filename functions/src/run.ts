@@ -1,270 +1,237 @@
-// Firestore reads, Web Push delivery and state saving. The decision of what
-// to notify lives in logic.ts (pure and tested).
+// The notifier's two jobs: the scheduled run (event reminders, daily summary,
+// key dates and any activity the instant path missed) and the instant
+// "Sam added milk to the shopping list". What to send is decided in logic.ts.
+import { setTimeout as sleep } from 'node:timers/promises';
+import type { DocumentReference, Firestore, QueryDocumentSnapshot } from 'firebase-admin/firestore';
+import { zonedParts } from '../../src/shared/dates';
+import type { Activity, Household } from '../../src/shared/types';
+import { errorText, householdTag, log } from './log';
 import {
-  type CollectionReference, type DocumentData, type DocumentReference,
-  type Firestore, type Query, type QueryDocumentSnapshot,
-} from 'firebase-admin/firestore';
-import webpush from 'web-push';
-import type { Activity, CalEvent, Device, Household, KeyDate, Lang, MenuDay, Task } from '../../src/shared/types';
-import { addDays, zonedParts, type DateStr } from '../../src/shared/dates';
-import {
-  DAY, KEYDATE_HOUR, MINUTE, activityDigest, computeNotifications, dailyKey, deviceLang, householdTz,
-  isDailyWindow, notifySettings, pushPayload, selectDevices, type ComputeInput, type OutMessage,
+  activityDigest,
+  byCreation,
+  computeNotifications,
+  DAY,
+  dailyKey,
+  householdTz,
+  isDailyWindow,
+  KEYDATE_HOUR,
+  MINUTE,
+  notifySettings,
 } from './logic';
-import { DEFAULT_LANG } from './i18n';
+import { parseActivity, parseHousehold } from './parse';
+import { type DeliveryReport, deliver, selectDevices } from './push';
+import * as store from './store';
 
-const TTL_SECONDS = 6 * 60 * 60;
-const PUSH_TIMEOUT_MS = 15_000;
-/** One-off events that are read: those starting in [today−1, today+14] (reminders up to ~2 weeks ahead). */
-const EVENT_QUERY_DAYS = 14;
-const NOTIFY_LOG_KEEP = 14 * DAY;
-const ACTIVITY_KEEP = 7 * DAY;
-const RECURRING_FREQS = ['daily', 'weekly', 'monthly', 'yearly'];
 /** Whatever someone adds within this interval is grouped into a single notification. */
-export const ACTIVITY_BURST = 10 * MINUTE;
+const ACTIVITY_BURST = 10 * MINUTE;
 /** The scheduled job only picks up activity that the instant function didn't notify. */
 const ACTIVITY_FALLBACK_AGE = 3 * MINUTE;
+/** Sent keys are remembered this long (much longer than any catch-up). */
+const SENT_KEEP = 2 * DAY;
+/** Local hour from which the daily cleanup runs. */
+const CLEANUP_HOUR = 3;
+/** Households processed at the same time. */
+const HOUSEHOLD_CONCURRENCY = 4;
+/** Households not started after this long wait for the next run (the timeout is 120 s). */
+const RUN_BUDGET_MS = 90_000;
+const TICK = 5 * MINUTE;
 
-// ---------- reading ----------
+// ---------- scheduled job ----------
 
-const withId = <T>(d: QueryDocumentSnapshot | { id: string; data(): DocumentData | undefined }): T =>
-  ({ ...(d.data() ?? {}), id: d.id }) as T;
-
-async function loadDocs<T>(q: Query): Promise<T[]> {
-  return (await q.get()).docs.map((d) => withId<T>(d));
-}
-
-function asEvent(d: QueryDocumentSnapshot): CalEvent {
-  const e = withId<CalEvent>(d);
-  return { ...e, memberIds: Array.isArray(e.memberIds) ? e.memberIds : [], exdates: Array.isArray(e.exdates) ? e.exdates : [] };
-}
-
-/**
- * To avoid reading the whole collection on every run (Firestore free tier),
- * only these are read: events starting near today, all recurring ones and,
- * when the daily summary is due, multi-day events still in progress.
- */
-async function loadEvents(col: CollectionReference, today: DateStr, withOngoing: boolean): Promise<CalEvent[]> {
-  const queries: Query[] = [
-    col.where('date', '>=', addDays(today, -1)).where('date', '<=', addDays(today, EVENT_QUERY_DAYS)),
-    col.where('recurrence.freq', 'in', RECURRING_FREQS),
-  ];
-  if (withOngoing) queries.push(col.where('endDate', '>=', today));
-  const byId = new Map<string, CalEvent>();
-  for (const snap of await Promise.all(queries.map((q) => q.get()))) {
-    for (const d of snap.docs) byId.set(d.id, asEvent(d));
-  }
-  return [...byId.values()];
-}
-
-function asActivity(a: Activity): Activity {
-  // In case the app ever stored the date as a Timestamp instead of a number.
-  const c = a.createdAt as unknown as { toMillis?: () => number } | number;
-  return typeof c === 'object' && c?.toMillis ? { ...a, createdAt: c.toMillis() } : a;
-}
-
-async function existingKeys(db: Firestore, col: CollectionReference, keys: string[]): Promise<Set<string>> {
-  if (!keys.length) return new Set();
-  const snaps = await db.getAll(...keys.map((k) => col.doc(k)));
-  return new Set(snaps.filter((s) => s.exists).map((s) => s.id));
-}
-
-// ---------- delivery ----------
-
-export interface Vapid { publicKey: string; privateKey: string; subject: string }
-
-export function configureVapid(v: Vapid) {
-  webpush.setVapidDetails(v.subject, v.publicKey, v.privateKey);
-}
-
-type SendOutcome = 'ok' | 'gone' | 'error';
-
-async function sendOne(device: Device, m: OutMessage): Promise<SendOutcome> {
-  try {
-    await webpush.sendNotification(device.subscription, pushPayload(m), {
-      TTL: TTL_SECONDS, urgency: m.urgency, timeout: PUSH_TIMEOUT_MS,
-    });
-    return 'ok';
-  } catch (e) {
-    const status = (e as { statusCode?: number }).statusCode;
-    if (status === 404 || status === 410) return 'gone';
-    console.warn(`Failed to send to device ${device.id}: ${status ?? ''} ${(e as Error).message ?? e}`.trim());
-    return 'error';
-  }
-}
-
-/**
- * The same messages worded in a given language. Must return the same list
- * (same order, keys, tags and audiences) for every language; only the text
- * changes. computeNotifications and activityDigest guarantee that.
- */
-type Render = (lang: Lang) => OutMessage[];
-
-/**
- * Sends each message to its devices, each device in its own language, and
- * deletes the devices that no longer exist. Messages are only rendered for
- * the languages that have devices (DEFAULT_LANG if there are none at all).
- *
- * A message counts as delivered (and its dedupe key is returned) unless every
- * target, across all languages, failed with a temporary error: then it's
- * retried on the next run.
- */
-async function deliver(devicesCol: CollectionReference, devices: Device[], render: Render) {
-  const rendered = new Map<Lang, OutMessage[]>();
-  const inLang = (lang: Lang): OutMessage[] => {
-    let ms = rendered.get(lang);
-    if (!ms) rendered.set(lang, (ms = render(lang)));
-    return ms;
-  };
-  // Canonical list (audiences and keys): any language present gives the same one.
-  const messages = inLang(devices.length ? deviceLang(devices[0]) : DEFAULT_LANG);
-
-  /** Message i in the device's language (the canonical one if, against the contract, they don't match). */
-  const localized = (d: Device, i: number, m: OutMessage): OutMessage => {
-    const local = inLang(deviceLang(d))[i];
-    if (local?.tag === m.tag && local.key === m.key) return local;
-    console.error(`Localized message mismatch (${deviceLang(d)}) for ${m.tag}`);
-    return m;
-  };
-
-  const gone = new Set<string>();
-  const delivered: OutMessage[] = [];
-  const langs = new Set<Lang>();
-  let sent = 0;
-  let failed = 0;
-  for (const [i, m] of messages.entries()) {
-    const targets = selectDevices(devices, m.toUids).filter((d) => !gone.has(d.id));
-    for (const d of targets) langs.add(deviceLang(d));
-    const outcomes = await Promise.all(targets.map((d) => sendOne(d, localized(d, i, m))));
-    let ok = 0;
-    let err = 0;
-    outcomes.forEach((o, j) => {
-      if (o === 'ok') ok++;
-      else if (o === 'gone') gone.add(targets[j].id);
-      else err++;
-    });
-    sent += ok;
-    failed += err;
-    // If everything failed with temporary errors it's not considered sent: retried on the next run.
-    if (ok > 0 || err === 0) delivered.push(m);
-  }
-  await Promise.all([...gone].map((id) => devicesCol.doc(id).delete()));
-  return { delivered, sent, failed, gone: gone.size, langs: [...langs] };
-}
-
-// ---------- scheduled job: reminders, daily summary and key dates ----------
-
-export async function processHousehold(db: Firestore, doc: QueryDocumentSnapshot, now: number) {
-  const ref: DocumentReference = doc.ref;
-  const household = withId<Household>(doc);
+async function processHousehold(db: Firestore, doc: QueryDocumentSnapshot, now: number): Promise<void> {
+  const household = parseHousehold(doc.id, doc.data());
   const tz = householdTz(household);
   const { date: today, hour, time } = zonedParts(now, tz);
+  const ref = doc.ref;
   const metaRef = ref.collection('meta').doc('notifier');
-  const logCol = ref.collection('notifyLog');
-  const activityCol = ref.collection('activity');
-  const devicesCol = ref.collection('devices');
 
-  const meta = await metaRef.get();
-  const last = Number(meta.get('lastRunAt'));
-  const lastRunAt = meta.exists && Number.isFinite(last) && last > 0 ? last : null;
+  const withDevices = await store.hasDevices(ref.collection('devices'));
+  // Nobody to notify: only the daily cleanup, during its hour.
+  if (!withDevices && hour !== CLEANUP_HOUR) return;
 
-  // Tasks, menu and long events are only needed when the daily summary is due.
-  const needDaily = isDailyWindow(household, now) && !(await logCol.doc(dailyKey(today)).get()).exists;
-  const needKeyDates = needDaily || hour >= KEYDATE_HOUR;
+  const state = await store.readState(metaRef);
+  const next: store.NotifierState = { ...state, sent: { ...state.sent }, legacy: false };
 
-  const [events, tasks, menuToday, keyDates, pending] = await Promise.all([
-    loadEvents(ref.collection('events'), today, needDaily),
-    needDaily ? loadDocs<Task>(ref.collection('tasks').where('done', '==', false)) : Promise.resolve([]),
-    needDaily
-      ? ref.collection('menu').doc(today).get().then((s) => (s.exists ? withId<MenuDay>(s) : null))
-      : Promise.resolve(null),
-    needKeyDates ? loadDocs<KeyDate>(ref.collection('dates')) : Promise.resolve([]),
-    loadDocs<Activity>(activityCol.where('notified', '==', false)).then((xs) => xs.map(asActivity)),
-  ]);
-  // Recent activity is notified right away by onActivityCreated; here only what it missed.
-  const activity = pending.filter((a) => (a.createdAt ?? 0) < now - ACTIVITY_FALLBACK_AGE);
-
-  const input: ComputeInput = { household, events, tasks, menuToday, keyDates, activity, now, lastRunAt, sentKeys: [] };
-  // 1st pass without keys to know which ones to look up in notifyLog; 2nd with the ones already sent.
-  // Keys don't depend on the language, so these passes use the default one.
-  const draft = computeNotifications(input);
-  const candidateKeys = [...new Set(draft.messages.flatMap((m) => (m.key ? [m.key] : [])))];
-  const final: ComputeInput = { ...input, sentKeys: await existingKeys(db, logCol, candidateKeys) };
-  const { messages, activityIdsToMark } = computeNotifications(final);
-
-  const devices = messages.length ? await loadDocs<Device>(devicesCol) : [];
-  const result = await deliver(devicesCol, devices,
-    (lang) => (lang === DEFAULT_LANG ? messages : computeNotifications(final, lang).messages));
-
-  // State and cleanup (activity older than 7 days and notification log older than 14).
-  const [oldActivity, oldLog] = await Promise.all([
-    activityCol.where('createdAt', '<', now - ACTIVITY_KEEP).select().get(),
-    logCol.where('at', '<', now - NOTIFY_LOG_KEEP).select().get(),
-  ]);
-  const writer = db.bulkWriter();
-  for (const k of new Set(result.delivered.flatMap((m) => (m.key ? [m.key] : [])))) writer.set(logCol.doc(k), { at: now });
-  const deleted = new Set(oldActivity.docs.map((d) => d.id));
-  for (const id of activityIdsToMark) if (!deleted.has(id)) writer.update(activityCol.doc(id), { notified: true });
-  for (const d of [...oldActivity.docs, ...oldLog.docs]) writer.delete(d.ref);
-  writer.set(metaRef, { lastRunAt: now }, { merge: true });
-  await writer.close();
-
-  if (messages.length) {
-    const kinds = messages.map((m) => m.kind).join(',');
-    console.log(`Household ${doc.id} · ${time} ${tz} · messages ${kinds} · sent ${result.sent}` +
-      (result.langs.length ? ` (${result.langs.join(',')})` : '') +
-      (result.failed ? ` · failed ${result.failed}` : '') + (result.gone ? ` · expired ${result.gone}` : ''));
+  if (withDevices) {
+    const report = await notifyHousehold(db, ref, household, state, next, now);
+    if (report) {
+      log.info('Notifications sent', {
+        household: householdTag(household.id),
+        localTime: `${today} ${time}`,
+        tz,
+        kinds: report.kinds,
+        sent: report.sent,
+        langs: report.langs,
+        ...(report.errors && { errors: report.errors }),
+        ...(report.rejected && { rejected: report.rejected }),
+        ...(report.goneDeviceIds.length && { expired: report.goneDeviceIds.length }),
+      });
+    }
   }
+
+  if (hour >= CLEANUP_HOUR && state.cleanedOn !== today) {
+    const deleted = await store.cleanup(db, ref, household, now);
+    if (deleted) log.info('Cleanup', { household: householdTag(household.id), deleted });
+    next.cleanedOn = today;
+  }
+
+  next.sent = Object.fromEntries(Object.entries(next.sent).filter(([, at]) => at >= now - SENT_KEEP));
+  if (!store.sameState(state, next)) await store.writeState(metaRef, next);
 }
 
-export async function processAllHouseholds(db: Firestore, now = Date.now()) {
-  const households = await db.collection('households').get();
+/** Computes, sends and records this run's notifications. Updates `next`; returns what was sent, if anything. */
+async function notifyHousehold(
+  db: Firestore,
+  ref: DocumentReference,
+  household: Household,
+  state: store.NotifierState,
+  next: store.NotifierState,
+  now: number,
+): Promise<(DeliveryReport & { kinds: string }) | null> {
+  const { date: today, hour } = zonedParts(now, householdTz(household));
+  const col = (name: string) => ref.collection(name);
+
+  // Tasks, menu and long events are only needed for the daily summary; key
+  // dates for it and once a day from KEYDATE_HOUR.
+  const needDaily = isDailyWindow(household, now) && !(dailyKey(today) in state.sent);
+  const checkKeyDates = hour >= KEYDATE_HOUR && state.keyDatesOn !== today;
+  const [events, tasks, menuToday, keyDates, pending] = await Promise.all([
+    store.loadEvents(col('events'), today, needDaily),
+    needDaily ? store.loadPendingTasks(col('tasks')) : [],
+    needDaily ? store.loadMenuDay(col('menu'), today) : null,
+    needDaily || checkKeyDates ? store.loadKeyDates(col('dates')) : [],
+    store.loadPendingActivity(col('activity')),
+  ]);
+  // Recent activity is notified right away by onActivityCreated; here only what it missed.
+  const activity = pending.filter((a) => a.createdAt < now - ACTIVITY_FALLBACK_AGE);
+
+  const { messages, activityIdsToMark, quietKeys } = computeNotifications({
+    household,
+    events,
+    tasks,
+    menuToday,
+    keyDates,
+    activity,
+    now,
+  });
+
+  const sentKeys = new Set(Object.keys(state.sent));
+  if (state.legacy) {
+    const keys = messages.flatMap((m) => (m.key ? [m.key] : []));
+    for (const k of await store.legacySentKeys(db, col('notifyLog'), keys)) {
+      sentKeys.add(k);
+      next.sent[k] = now;
+    }
+  }
+  const fresh = messages.filter((m) => !m.key || !sentKeys.has(m.key));
+  const report = fresh.length
+    ? await deliver(fresh, await store.loadDevices(col('devices')), household.memberUids)
+    : null;
+
+  for (const k of report?.delivered ?? []) next.sent[k] = now;
+  for (const k of quietKeys) next.sent[k] ??= now;
+  // Key dates are done for today unless one of them has to be retried.
+  if (checkKeyDates && ![...(report?.failed ?? [])].some((k) => k.startsWith('kd_'))) next.keyDatesOn = today;
+
+  const w = store.writer(db, household.id);
+  for (const id of report?.goneDeviceIds ?? []) w.delete(col('devices').doc(id));
+  for (const id of activityIdsToMark) w.update(col('activity').doc(id), { notified: true });
+  await w.close();
+
+  return report && { ...report, kinds: fresh.map((m) => m.kind).join(',') };
+}
+
+/** Runs `fn` over `items`, at most `limit` at a time. */
+async function forEachLimit<T>(items: readonly T[], limit: number, fn: (item: T) => Promise<void>) {
+  let i = 0;
+  const worker = async () => {
+    while (i < items.length) {
+      const item = items[i++] as T;
+      await fn(item);
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
+}
+
+export async function processAllHouseholds(db: Firestore, now = Date.now()): Promise<void> {
+  const snap = await db.collection('households').select('memberUids', 'members', 'timezone', 'notify').get();
+  // Start at a different household each run, so none is always the last one.
+  const start = snap.docs.length ? Math.floor(now / TICK) % snap.docs.length : 0;
+  const docs = [...snap.docs.slice(start), ...snap.docs.slice(0, start)];
+  const began = Date.now();
   let failed = 0;
-  for (const doc of households.docs) {
+  let postponed = 0;
+  await forEachLimit(docs, HOUSEHOLD_CONCURRENCY, async (doc) => {
+    if (Date.now() - began > RUN_BUDGET_MS) {
+      postponed++;
+      return;
+    }
     try {
       await processHousehold(db, doc, now);
     } catch (e) {
       failed++;
-      console.error(`Household ${doc.id}: ${(e as Error).stack ?? e}`);
+      log.error('Household failed', { household: householdTag(doc.id), error: errorText(e, doc.id) });
     }
-  }
+  });
+  if (postponed) log.warn('Out of time: households left for the next run', { postponed });
   if (failed) throw new Error(`${failed} household(s) failed`);
 }
 
 // ---------- instant: "Sam added milk to the shopping list" ----------
 
+export interface ActivityTrigger {
+  /** When Firestore created the activity document (server clock). */
+  createTime: number;
+  /** How long after `createTime` to wait for more activity from the same person. */
+  debounceMs: number;
+}
+
+/** Is there activity newer than `mine`, not yet notified? Then its own run takes care of `mine` too. */
+const newerPending = (recent: Activity[], mine: Activity) =>
+  recent.some((a) => a.id !== mine.id && !a.notified && byCreation(a, mine) > 0);
+
 /**
- * Called when an activity document is created. If another one from the same
- * person arrives within a few seconds, that one is left to notify (so "milk,
- * bread, eggs" added in a row arrive as a single notification).
+ * Called when an activity document is created. Things a person adds in a row
+ * ("milk, bread, eggs") arrive as a single notification: only the run of the
+ * latest one waits and sends; the others step aside right away.
  */
-export async function processActivity(db: Firestore, householdRef: DocumentReference, activityId: string, debounceMs: number) {
-  if (debounceMs > 0) await new Promise((r) => setTimeout(r, debounceMs));
-  const now = Date.now();
+export async function processActivity(
+  db: Firestore,
+  householdRef: DocumentReference,
+  activityId: string,
+  trigger: ActivityTrigger,
+): Promise<void> {
+  const hid = householdRef.id;
   const activityCol = householdRef.collection('activity');
+  const [hSnap, mineSnap] = await Promise.all([householdRef.get(), activityCol.doc(activityId).get()]);
+  if (!hSnap.exists || !mineSnap.exists) return;
+  const mine = parseActivity(mineSnap.id, mineSnap.data() ?? {}, mineSnap.createTime?.toMillis() ?? trigger.createTime);
+  if (mine.notified) return; // a newer activity's run already included it
+  const household = parseHousehold(hSnap.id, hSnap.data() ?? {});
 
-  const [hSnap, me] = await Promise.all([householdRef.get(), activityCol.doc(activityId).get()]);
-  if (!hSnap.exists || !me.exists) return;
-  const mine = asActivity(withId<Activity>(me));
-  if (mine.notified) return; // another run already notified it
+  const burst = () => store.loadActorBurst(activityCol, mine, mineSnap.get('createdAt'), ACTIVITY_BURST);
+  let recent = await burst();
+  if (newerPending(recent, mine)) return;
 
-  const recent = (await loadDocs<Activity>(activityCol.where('createdAt', '>=', now - ACTIVITY_BURST)))
-    .map(asActivity)
-    .filter((a) => a.actorUid === mine.actorUid)
-    .sort((a, b) => (a.createdAt ?? 0) - (b.createdAt ?? 0));
-  const latest = recent[recent.length - 1];
-  if (latest && latest.id !== mine.id && !latest.notified) return; // there's a newer one: let it notify
-
-  const pending = recent.filter((a) => !a.notified);
-  const household = withId<Household>(hSnap);
-  if (notifySettings(household).activity && pending.length) {
+  const devicesCol = householdRef.collection('devices');
+  const devices = notifySettings(household).activity ? await store.loadDevices(devicesCol) : [];
+  const audience = mine.actorUid ? { excludeUid: mine.actorUid } : ('all' as const);
+  let gone: string[] = [];
+  if (selectDevices(devices, audience, household.memberUids).length) {
+    const wait = Math.min(trigger.createTime + trigger.debounceMs - Date.now(), trigger.debounceMs);
+    if (wait > 0) {
+      await sleep(wait);
+      recent = await burst();
+      if (newerPending(recent, mine)) return;
+    }
+    if (!recent.some((a) => !a.notified)) return; // another run sent it meanwhile
     // Rebuilt with the whole burst so the new notification replaces the previous one.
-    const devicesCol = householdRef.collection('devices');
-    const devices = await loadDocs<Device>(devicesCol);
-    await deliver(devicesCol, devices, (lang) => activityDigest(recent, now, { includeNotified: true }, lang));
+    const digest = activityDigest(recent, Date.now(), { includeNotified: true, members: household.members });
+    gone = (await deliver(digest, devices, household.memberUids)).goneDeviceIds;
   }
-  // Marked once, whatever the languages.
-  const batch = db.batch();
-  for (const a of pending) batch.update(activityCol.doc(a.id), { notified: true });
-  await batch.commit();
+  // Marked even if nobody could be told, so the scheduled job doesn't pick it up.
+  const w = store.writer(db, hid);
+  for (const a of recent) if (!a.notified) w.update(activityCol.doc(a.id), { notified: true });
+  for (const id of gone) w.delete(devicesCol.doc(id));
+  await w.close();
 }

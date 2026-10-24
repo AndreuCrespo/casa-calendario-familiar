@@ -3,13 +3,25 @@
   "private": true,
   "version": "1.0.0",
   "type": "module",
+  "engines": {
+    "node": ">=22.12"
+  },
   "scripts": {
     "dev": "vite --host",
-    "build": "tsc --noEmit && vite build",
+    "dev:emulators": "firebase emulators:exec --only auth,firestore --project demo-casa \"VITE_USE_EMULATORS=true VITE_FIREBASE_API_KEY=demo-key VITE_FIREBASE_PROJECT_ID=demo-casa VITE_FIREBASE_AUTH_DOMAIN=localhost vite --host --port 5175\"",
+    "build": "npm run typecheck && vite build",
     "preview": "vite preview --host",
+    "typecheck": "tsc -p tsconfig.json && tsc -p tsconfig.sw.json && tsc -p tsconfig.node.json && tsc -p tests/rules/tsconfig.json",
+    "lint": "biome check .",
+    "format": "biome check --write .",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:rules": "firebase emulators:exec --only firestore --project demo-casa \"vitest run --config vitest.rules.config.ts\"",
+    "test:functions": "npm --prefix functions test",
+    "check": "npm run lint && npm run typecheck && npm test && npm run test:functions",
     "icons": "node scripts/icons.mjs",
     "deploy:web": "npm run build && firebase deploy --only hosting,firestore",
-    "deploy": "npm run build && firebase deploy --only hosting,firestore && FUNCTIONS_DISCOVERY_TIMEOUT=120 firebase deploy --only functions"
+    "deploy": "npm run deploy:web && FUNCTIONS_DISCOVERY_TIMEOUT=120 firebase deploy --only functions"
   },
   "dependencies": {
     "@fontsource-variable/manrope": "^5.3.0",
@@ -24,12 +36,18 @@
     "workbox-strategies": "^7.4.1"
   },
   "devDependencies": {
+    "@biomejs/biome": "2.6.2",
+    "@firebase/rules-unit-testing": "^6.0.0",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
     "@vitejs/plugin-react": "^6.1.2",
     "sharp": "^0.35.5",
     "typescript": "^7.0.2",
     "vite": "^8.3.5",
-    "vite-plugin-pwa": "^2.0.0"
+    "vite-plugin-pwa": "^2.0.0",
+    "vitest": "^5.0.5"
+  },
+  "overrides": {
+    "@grpc/grpc-js": "^1.13.6"
   }
 }

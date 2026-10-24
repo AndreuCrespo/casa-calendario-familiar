@@ -1,5 +1,5 @@
-import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
+import { defineConfig } from 'vite';
 import { VitePWA } from 'vite-plugin-pwa';
 
 // Under WSL, edits made from Windows to /mnt/... don't fire inotify events,
@@ -10,15 +10,32 @@ export default defineConfig({
   server: {
     watch: wslOnWindowsDrive ? { usePolling: true, interval: 300 } : undefined,
   },
+  build: {
+    // Libraries go in their own files, so a new version of the app only
+    // changes (and downloads) the app's own code.
+    rolldownOptions: {
+      output: {
+        codeSplitting: {
+          groups: [
+            { name: 'firebase', test: /[\\/]node_modules[\\/](@firebase|firebase|re2js|idb)[\\/]/, priority: 3 },
+            { name: 'react', test: /[\\/]node_modules[\\/](react|react-dom|scheduler)[\\/]/, priority: 2 },
+            { name: 'icons', test: /[\\/]node_modules[\\/]lucide-react[\\/]/, priority: 1 },
+          ],
+        },
+      },
+    },
+    // Firestore alone is bigger than the default warning size.
+    chunkSizeWarningLimit: 700,
+  },
   plugins: [
     react(),
     VitePWA({
       strategies: 'injectManifest',
       srcDir: 'src',
       filename: 'sw.ts',
-      registerType: 'autoUpdate',
+      // The page decides when to switch to a new version (see main.tsx).
+      registerType: 'prompt',
       injectRegister: false,
-      includeAssets: ['favicon.svg', 'apple-touch-icon-180x180.png'],
       injectManifest: {
         globPatterns: ['**/*.{js,css,html,svg,png,woff2}'],
       },

@@ -1,5 +1,7 @@
 # Casa 🏠 · family hub PWA
 
+[![CI](https://github.com/AndreuCrespo/family-hub-pwa/actions/workflows/ci.yml/badge.svg)](https://github.com/AndreuCrespo/family-hub-pwa/actions/workflows/ci.yml)
+
 A shared calendar and household organizer for the whole family. It's a **Progressive Web App**: it installs from the browser on Android and iPhone, with no app stores and no paid Apple Developer account. Changes show up instantly on everyone's phone.
 
 <p align="center">
@@ -10,7 +12,7 @@ A shared calendar and household organizer for the whole family. It's a **Progres
 
 <sub>Screenshots from demo mode, with sample data.</sub>
 
-**Stack:** React + Vite (PWA with a service worker) · Firebase Auth, Firestore, Hosting and Cloud Functions · Web Push (VAPID) · [Open-Meteo](https://open-meteo.com) for weather and [REE](https://www.ree.es/es/apidatos) for electricity prices.
+**Stack:** React 19 + TypeScript (strict) + Vite, as a PWA with a service worker · Firebase Auth, Firestore, Hosting and Cloud Functions · Web Push (VAPID) · [Open-Meteo](https://open-meteo.com) for weather and [REE](https://www.ree.es/es/apidatos) for electricity prices · Vitest, the Firestore emulator, Biome and GitHub Actions for quality.
 
 ## Features
 
@@ -49,10 +51,10 @@ To try it on a phone on the same Wi-Fi, open the `Network` address printed by Vi
 ### 1. Create the Firebase project
 
 1. Go to <https://console.firebase.google.com> → **Create project**. Google Analytics isn't needed.
-2. **Authentication** → *Get started* → *Sign-in method*: enable **Email/Password** and **Google**.
-3. **Firestore Database** → *Create database* → **Standard** edition, `(default)` ID → location **`europe-southwest1` (Madrid)** → **production mode**.
+2. **Authentication** → _Get started_ → _Sign-in method_: enable **Email/Password** and **Google**.
+3. **Firestore Database** → _Create database_ → **Standard** edition, `(default)` ID → location **`europe-southwest1` (Madrid)** → **production mode**.
    > If you pick another location, update `FIRESTORE_REGION` in [`functions/src/index.ts`](functions/src/index.ts): the instant-notification function must run in the same region as the database.
-4. **Project settings** (gear icon) → *Your apps* → **`</>`** (web) → register the app. Copy the `firebaseConfig` values.
+4. **Project settings** (gear icon) → _Your apps_ → **`</>`** (web) → register the app. Copy the `firebaseConfig` values.
 5. In the project folder, copy `.env.example` to `.env.local` and fill in those values:
 
    ```
@@ -63,7 +65,6 @@ To try it on a phone on the same Wi-Fi, open the `Network` address printed by Vi
    ```
 
    > Set `AUTH_DOMAIN` to `YOUR-PROJECT.web.app`, not the `firebaseapp.com` domain Firebase suggests. That keeps Google sign-in working inside the app installed on an iPhone. See step 3.
-
 ### 2. Deploy it (Firebase Hosting)
 
 ```bash
@@ -92,7 +93,7 @@ That builds the app and deploys the website and the Firestore security rules (`f
 
 Skip this if everyone signs in with email and password.
 
-In <https://console.cloud.google.com> (same project) → *APIs & Services* → *Credentials* → *Web client (auto created by Google Service)* → under **Authorized redirect URIs**, keep the existing URI and add:
+In <https://console.cloud.google.com> (same project) → _APIs & Services_ → _Credentials_ → _Web client (auto created by Google Service)_ → under **Authorized redirect URIs**, keep the existing URI and add:
 
 ```
 https://YOUR-PROJECT.web.app/__/auth/handler
@@ -106,12 +107,12 @@ https://YOUR-PROJECT.web.app/__/auth/handler
 ### 5. Create your household and invite your partner
 
 1. Sign in and set up the household: your name, your partner's, the kids' and your city.
-2. On the **home screen** (or in **Settings → Invite**), tap **Share** and send the link.
+2. On the **home screen** tap **Share** (or in **Settings → Invite**, **Create an invite link**) and send the link.
 3. Your partner opens the link, creates an account, taps **Join** and picks their name.
 
 > On iPhone the installed app doesn't share storage with Safari: open the invite link in Safari, join there, then add it to the Home Screen and sign in again.
 >
-> The invite link contains the household's secret ID. Only share it with people who should join.
+> An invite link works for **7 days** and anyone who has it can join while it lasts, so only send it to people who should. **Settings → Invite → Revoke** cancels it at once.
 
 ---
 
@@ -119,15 +120,14 @@ https://YOUR-PROJECT.web.app/__/auth/handler
 
 Two functions in [`functions/`](functions/), deployed to the same Firebase project, send them:
 
-| Function | When | What |
-|---|---|---|
+| Function            | When                                   | What                                                                                                                                     |
+| ------------------- | -------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
 | `onActivityCreated` | Instantly, when someone adds something | "Sam added to the shopping list: milk, bread and eggs". Bursts are grouped into one notification, sent only to the other people's phones |
-| `notificationsTick` | Every 5 minutes | Event reminders, the morning summary (8:00 by default) and key dates |
+| `notificationsTick` | Every 5 minutes                        | Event reminders, the morning summary (8:00 by default) and key dates                                                                     |
 
 ### a) Switch to the Blaze plan and set a budget alert
 
 Cloud Functions need the **Blaze** (pay-as-you-go) plan. A family's usage fits in the free tier and the expected bill is **€0**, but set an alert anyway:
-
 1. Firebase console → bottom left, **Spark → Upgrade** → **Blaze**, and link a payment method.
 2. When asked for a **budget**, enter **€1** to get an email if anything spikes.
 
@@ -155,15 +155,14 @@ npm run deploy
 ```
 
 It deploys the website and rules first and then the functions, so a function error never blocks a website release. The first time it asks for:
-
 - `VAPID_PUBLIC_KEY`: the public key from step b.
 - `VAPID_SUBJECT`: a contact for the push services, such as `mailto:you@example.com` or your app's `https://` URL.
 
 Both values are saved in `functions/.env.YOUR-PROJECT`, which isn't committed. If it asks how many days to keep function container images, answer **1** to avoid storage charges.
 
-> The first deployment of the Firestore-triggered function often fails with an *Eventarc* permission error: Google needs a few minutes to provision permissions. Wait 5 minutes and run `npm run deploy` again.
+> The first deployment of the Firestore-triggered function often fails with an _Eventarc_ permission error: Google needs a few minutes to provision permissions. Wait 5 minutes and run `npm run deploy` again.
 >
-> `npm run deploy` gives the CLI 120 s (`FUNCTIONS_DISCOVERY_TIMEOUT`) to analyze the functions. The default 10 s isn't enough from WSL with the project under `/mnt/…`, because reading `node_modules` from the Windows drive is slow (error *User code failed to load … Timeout after 10000*).
+> `npm run deploy` gives the CLI 120 s (`FUNCTIONS_DISCOVERY_TIMEOUT`) to analyze the functions. The default 10 s isn't enough from WSL with the project under `/mnt/…`, because reading `node_modules` from the Windows drive is slow (error _User code failed to load … Timeout after 10000_).
 
 ### d) Enable them on each phone
 
@@ -173,12 +172,12 @@ In the app: **Settings → Notifications on this phone**. On iPhone the app must
 
 ## Costs
 
-| Service | Plan | For a family |
-|---|---|---|
-| Firebase Auth, Firestore and Hosting | Free (also within Blaze) | Far below the limits (50,000 Firestore reads per day; the 5-minute task uses about 10,000) |
-| Cloud Functions and Cloud Scheduler | Blaze | Within the free tier: 2 million invocations per month and 3 free scheduled jobs |
-| Secret Manager | Blaze | 1 secret, within the free tier |
-| Open-Meteo and REE | Public APIs | No key, no cost |
+| Service                              | Plan                     | For a family                                                                               |
+| ------------------------------------ | ------------------------ | ------------------------------------------------------------------------------------------ |
+| Firebase Auth, Firestore and Hosting | Free (also within Blaze) | Far below the limits (50,000 Firestore reads per day). The 5-minute task reads one document per household while no phone has notifications on, and only what's due when one does |
+| Cloud Functions and Cloud Scheduler  | Blaze                    | Within the free tier: 2 million invocations per month and 3 free scheduled jobs            |
+| Secret Manager                       | Blaze                    | 1 secret, within the free tier                                                             |
+| Open-Meteo and REE                   | Public APIs              | No key, no cost                                                                            |
 
 ---
 
@@ -188,9 +187,16 @@ In the app: **Settings → Notifications on this phone**. On iPhone the app must
   - The Firebase config lives in `.env.local`.
   - The VAPID private key lives in Secret Manager.
   - The functions use the project's own identity; no service account keys are downloaded.
-  - `.gitignore` blocks `.env*`, `*firebase-adminsdk*.json`, `*.pem` and `*.key`.
-- The Firebase web config (`VITE_FIREBASE_*`) isn't secret: it ends up in the JavaScript every browser downloads. What protects the data are the [Firestore rules](firestore.rules): only members of a household can read or change it.
-- Function logs only contain IDs and counts, never the text of your events or notes.
+  - `.gitignore` blocks `.env*`, `*firebase-adminsdk*.json`, `*.pem`, `*.key` and the emulators' secret files.
+- The Firebase web config (`VITE_FIREBASE_*`) isn't secret: it ends up in the JavaScript every browser downloads. What protects the data are the [Firestore rules](firestore.rules), covered by 110 tests against the emulator:
+  - Only members can read or change a household. Members can remove accounts from it but never add one.
+  - Joining requires a valid invite: a random code that expires after 7 days and can be revoked. Each account records the code it used, and the rules check it.
+  - Every write is validated: allowed fields, types and sizes (the limits live in [`src/shared/limits.ts`](src/shared/limits.ts)).
+  - Each person's home layout is private to them. Push subscriptions can't be read by anyone, and only point to the known push services.
+  - Activity records (for notifications) can only be created, in your own name.
+- Signing out turns notifications off on that device and deletes the offline copy of the data.
+- The hosting sends security headers (`nosniff`, `Referrer-Policy`, `X-Frame-Options`, `Permissions-Policy`, HSTS) and a Content Security Policy in report-only mode.
+- Notification links can only open pages of the app. Function logs only contain hashed IDs and counts, never your events or notes.
 
 ---
 
@@ -198,26 +204,49 @@ In the app: **Settings → Notifications on this phone**. On iPhone the app must
 
 ```
 src/
-  shared/      Types, dates and recurrence (dependency-free; shared with the functions)
-  i18n/        Spanish and English UI texts (es.ts defines the keys; en.ts must match)
-  lib/         Firebase, demo mode, hooks, weather, electricity, push, router, dashboard settings
-  components/  Reusable components (sheets, chips, event editor, dashboard editor…)
-  pages/       One screen per section
-  sw.ts        Service worker (offline support and notifications)
+  app/        App shell: routing, sections, navigation, household gate, error boundary
+  core/       Data layer (Firestore and demo backends, live store), clock, formatting, storage, session
+  features/   One folder per section: page, components, logic, tests and styles
+              auth · calendar · dashboard · energy · expenses · keyDates · members · menu
+              more · notes · notifications · settings · shopping · tasks · weather · demo
+  ui/         Shared components: sheet (<dialog>), toasts, buttons, inputs
+  i18n/       Spanish and English UI texts (es.ts defines the keys; en.ts must match)
+  shared/     Types, dates, recurrence, limits, routes and locale (no dependencies; also used by the functions)
+  styles/     Design tokens, base styles and shared components
+  sw.ts       Service worker (offline support and notifications)
 functions/
   src/logic.ts   What to notify and when (pure logic)
-  src/run.ts     Firestore reads, Web Push delivery and state
-  src/i18n.ts    Notification texts in Spanish and English
+  src/parse.ts   Validation of the stored documents
+  src/push.ts    Web Push delivery
+  src/store.ts   Firestore reads, notifier state and daily cleanup
+  src/run.ts     The two jobs
   src/index.ts   The two Cloud Functions
-firestore.rules  Security rules: only household members see their data
+firestore.rules  Security rules
+tests/rules/     Security rules tests (Firestore emulator)
 ```
 
+**How it works**
+
+- Every screen reads live data through one shared store: one Firestore listener per collection, opened while something shows it and closed a few minutes after. Writes are optimistic and work offline.
+- The weekly menu only syncs recent weeks; older ones load when you look at them.
+- One clock for the whole app, ticking on the minute: each component only re-renders when what it shows changes.
+- The app's own code is about 65 kB; Firebase and React are separate files, so an update only downloads what changed. Sections load when first opened.
+- A new version installs in the background and switches over the next time the app is hidden, so nobody loses what they're typing.
+
+**Scripts**
+
 - `npm run dev`: local dev server.
+- `npm run dev:emulators`: the app against local Firebase emulators (Auth and Firestore, with the real rules). Needs Java and the Firebase CLI.
+- `npm run check`: lint, types, unit tests and functions tests.
+- `npm test`: unit tests (Vitest).
+- `npm run test:rules`: security rules tests on the Firestore emulator (Java needed).
+- `npm run lint` / `npm run format`: [Biome](https://biomejs.dev) for linting and formatting.
 - `npm run build`: type-check and production build.
 - `npm run deploy:web`: deploy the website and rules.
-- `npm run deploy`: deploy everything, functions included (needs Blaze).
-- `npm --prefix functions test`: notification tests (logic, daylight-saving edge cases and an in-memory Firestore).
+- `npm run deploy`: deploy everything, functions included (needs Blaze). The functions are type-checked and tested first.
 - `npm run icons`: regenerate the icons (PNG and `favicon.ico`) from `public/favicon.svg` and `assets/icon-full.svg`.
+
+[GitHub Actions](.github/workflows/ci.yml) runs all the checks, the rules tests and a build on every push.
 
 > **WSL or Windows, not both.** `node_modules` contains native binaries for the system that ran `npm install` (Rolldown, TypeScript, esbuild). This project is installed from **WSL**. To use it from PowerShell, delete `node_modules` and `functions/node_modules` and reinstall there. With the project under `/mnt/d/...`, Vite polls for file changes so edits made from Windows are picked up too (already set in `vite.config.ts`).
 

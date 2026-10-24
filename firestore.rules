@@ -1,36 +1,486 @@
 rules_version = '2';
 
-// Each household is households/{hid}. The household id (20 random characters)
-// works as the invite code: anyone who knows it can join.
-// Everything else can only be read/written by members.
+// Casa: Firestore security rules.
+//
+// Model: everything lives under households/{hid}. Only members (memberUids)
+// can read or write a household and its subcollections.
+//
+// · Joining: the secret is an invite (households/{hid}/invites/{code}, Firestore
+//   auto id, expires within 7 days), not the household id. A signed-in
+//   non-member joins by updating the household with exactly
+//   { memberUids: arrayUnion(self), 'joinedWith.<self>': <code> }.
+//   joinedWith is a per-joiner map so each join must name its own valid code
+//   (a single shared field would let a later join reuse an earlier joiner's).
+// · Members may edit the household, but memberUids can only shrink: nobody can
+//   add another account (that is what invites are for).
+// · Every client write is validated in full: allowed keys, types and sizes of
+//   the resulting document (household updates check the fields they change, to
+//   stay within the rules' 1000-expression budget).
+//   Size limits live in src/shared/limits.ts (LIMITS); the numbers below must
+//   match it:
+//     householdName 60 · memberName 40 · members 12 · title 200 ·
+//     shoppingItem 100 · notes 2000 · noteBody 5000 · place 200 · dish 200 ·
+//     activityText 300 · shoppingFreq 300 · exdates 400 · dashboardWidgets 30 ·
+//     amountCents 100000000 · inviteDays 7
+// · Server-only data (notifyLog, meta/notifier, activity after creation) is
+//   closed to clients: the Cloud Functions use the Admin SDK, which bypasses
+//   these rules.
+// · Anything not matched below (other subcollections, top-level paths) is denied.
+//
+// Tests: tests/rules (vitest + Firestore emulator).
 service cloud.firestore {
   match /databases/{database}/documents {
+
+    // ---------------------------------------------------------------- helpers
+
     function signedIn() {
       return request.auth != null;
     }
 
+    function nowMs() {
+      return request.time.toMillis();
+    }
+
+    function isStr(v, max) {
+      return v is string && v.size() <= max;
+    }
+
+    // Non-empty string.
+    function isText(v, max) {
+      return v is string && v.size() > 0 && v.size() <= max;
+    }
+
+    function isIntIn(v, lo, hi) {
+      return v is int && v >= lo && v <= hi;
+    }
+
+    // 'YYYY-MM-DD'
+    function isDate(v) {
+      return v is string && v.matches('[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])');
+    }
+
+    // 'HH:mm'
+    function isTime(v) {
+      return v is string && v.matches('([01][0-9]|2[0-3]):[0-5][0-9]');
+    }
+
+    // '#RRGGBB'
+    function isColor(v) {
+      return v is string && v.matches('#[0-9A-Fa-f]{6}');
+    }
+
+    function isList(v, max) {
+      return v is list && v.size() <= max;
+    }
+
+    // Firestore auto id (20 alphanumeric characters).
+    function isAutoId(v) {
+      return v is string && v.matches('[A-Za-z0-9]{20}');
+    }
+
+    // Optional fields: absent, or present with the right type (or null where noted).
+    function optStr(d, f, max) {
+      return !(f in d) || isStr(d[f], max);
+    }
+
+    function optStrOrNull(d, f, max) {
+      return !(f in d) || d[f] == null || isStr(d[f], max);
+    }
+
+    function optInt(d, f) {
+      return !(f in d) || d[f] is int;
+    }
+
+    function optIntOrNull(d, f) {
+      return !(f in d) || d[f] == null || d[f] is int;
+    }
+
+    function optDateOrNull(d, f) {
+      return !(f in d) || d[f] == null || isDate(d[f]);
+    }
+
+    function optTimeOrNull(d, f) {
+      return !(f in d) || d[f] == null || isTime(d[f]);
+    }
+
+    function optList(d, f, max) {
+      return !(f in d) || isList(d[f], max);
+    }
+
+    // Exactly these required keys, plus only these optional ones.
+    function hasShape(d, required, optional) {
+      return d.keys().hasAll(required) && d.keys().hasOnly(required.concat(optional));
+    }
+
+    // ------------------------------------------------------------- households
+
     match /households/{hid} {
-      function isMember() {
-        return signedIn()
-          && request.auth.uid in get(/databases/$(database)/documents/households/$(hid)).data.memberUids;
+
+      function householdPath() {
+        return /databases/$(database)/documents/households/$(hid);
       }
 
-      allow get: if signedIn();
+      function isMember() {
+        return signedIn() && request.auth.uid in get(householdPath()).data.memberUids;
+      }
+
+      // ---- household document
+
+      // Kept deliberately cheap: rules stop after 1000 evaluated expressions per
+      // request, and this runs for up to 12 entries. The four string fields are
+      // checked with one regex over id, name, color and kind joined by newlines
+      // ('.' never matches a newline, so a field can't swallow a separator).
+      // Concatenating a non-string, or a missing key, is an error: denied.
+      function validMember(m) {
+        return m.keys().hasOnly(['id', 'name', 'color', 'kind', 'uid'])
+          && (m.id + '\n' + m.name + '\n' + m.color + '\n' + m.kind)
+               .matches('.{1,40}\\n.{1,40}\\n#[0-9A-Fa-f]{6}\\n(adult|child)')   // name: LIMITS.memberName
+          && (m.get('uid', null) == null || m.uid.matches('.{1,128}'));
+      }
+
+      // Rules have no loops: each of the (at most 12) entries is checked by index.
+      function validMembers(l) {
+        return l is list && l.size() >= 1 && l.size() <= 12      // LIMITS.members
+          && validMember(l[0])
+          && (l.size() < 2 || validMember(l[1]))
+          && (l.size() < 3 || validMember(l[2]))
+          && (l.size() < 4 || validMember(l[3]))
+          && (l.size() < 5 || validMember(l[4]))
+          && (l.size() < 6 || validMember(l[5]))
+          && (l.size() < 7 || validMember(l[6]))
+          && (l.size() < 8 || validMember(l[7]))
+          && (l.size() < 9 || validMember(l[8]))
+          && (l.size() < 10 || validMember(l[9]))
+          && (l.size() < 11 || validMember(l[10]))
+          && (l.size() < 12 || validMember(l[11]));
+      }
+
+      function validLocation(l) {
+        return l == null || (l is map
+          && hasShape(l, ['name', 'lat', 'lon'], [])
+          && isStr(l.name, 200)                                  // LIMITS.place
+          && l.lat is number && l.lat >= -90 && l.lat <= 90
+          && l.lon is number && l.lon >= -180 && l.lon <= 180);
+      }
+
+      function validNotify(n) {
+        return n is map
+          && hasShape(n, ['dailySummary', 'dailyHour', 'activity'], [])
+          && n.dailySummary is bool
+          && isIntIn(n.dailyHour, 0, 23)
+          && n.activity is bool;
+      }
+
+      // Household fields. A create checks every field; an update checks the
+      // fields it changes (the others were checked when they were written). That
+      // keeps edits of a full household under the 1000-expression budget.
+      function validHousehold(d, changed) {
+        return hasShape(d, ['name', 'memberUids', 'members', 'timezone', 'createdAt'],
+                           ['location', 'notify', 'joinedWith'])
+          && d.memberUids is list && d.memberUids.size() >= 1 && d.memberUids.size() <= 12
+          && (!changed.hasAny(['name']) || isText(d.name, 60))   // LIMITS.householdName
+          && (!changed.hasAny(['members']) || validMembers(d.members))
+          && (!changed.hasAny(['timezone'])
+              || (isText(d.timezone, 64) && d.timezone.matches('[A-Za-z0-9_+/-]+')))
+          && (!changed.hasAny(['location']) || validLocation(d.get('location', null)))
+          && (!changed.hasAny(['notify']) || !('notify' in d) || validNotify(d.notify))
+          && (!changed.hasAny(['createdAt']) || d.createdAt is int)
+          // Entries are only ever added by isJoin(), which checks the code.
+          && (!changed.hasAny(['joinedWith']) || d.joinedWith is map);
+      }
+
+      // A member edits the household. memberUids may only lose entries.
+      function isMemberUpdate() {
+        let before = resource.data;
+        let after = request.resource.data;
+        return request.auth.uid in before.memberUids
+          && after.diff(before).affectedKeys()
+               .hasOnly(['name', 'members', 'timezone', 'location', 'notify', 'memberUids'])
+          && before.memberUids.hasAll(after.memberUids)
+          && after.memberUids.size() <= before.memberUids.size();
+      }
+
+      // A non-member joins with an invite:
+      //   { memberUids: arrayUnion(self), 'joinedWith.<self>': code }
+      // Only their own joinedWith entry may change, and it must name an existing,
+      // unexpired invite of this household.
+      function isJoin() {
+        let uid = request.auth.uid;
+        let before = resource.data;
+        let after = request.resource.data;
+        let code = after.joinedWith[uid];
+        let invitePath = /databases/$(database)/documents/households/$(hid)/invites/$(code);
+        return !(uid in before.memberUids)
+          && after.diff(before).affectedKeys().hasOnly(['memberUids', 'joinedWith'])
+          && after.memberUids == before.memberUids.concat([uid])
+          && after.joinedWith is map
+          && after.joinedWith.diff(before.get('joinedWith', {})).affectedKeys().hasOnly([uid])
+          && isAutoId(code)
+          && exists(invitePath)
+          && get(invitePath).data.expiresAt > nowMs();
+      }
+
+      allow get: if signedIn() && request.auth.uid in resource.data.memberUids;
       allow list: if signedIn() && request.auth.uid in resource.data.memberUids;
-      allow create: if signedIn() && request.resource.data.memberUids == [request.auth.uid];
-      allow update: if signedIn() && (
-        request.auth.uid in resource.data.memberUids
-        // Joining: the only change is adding yourself to memberUids
-        || (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['memberUids'])
-            && request.resource.data.memberUids.hasAll(resource.data.memberUids)
-            && request.resource.data.memberUids.size() == resource.data.memberUids.size() + 1
-            && request.auth.uid in request.resource.data.memberUids)
-      );
+      allow create: if signedIn()
+        && isAutoId(hid)
+        && request.resource.data.memberUids == [request.auth.uid]
+        && !('joinedWith' in request.resource.data)
+        && validHousehold(request.resource.data, request.resource.data.keys());
+      // Who may change what first, then the values of the changed fields.
+      allow update: if signedIn()
+        && (isMemberUpdate() || isJoin())
+        && validHousehold(request.resource.data, request.resource.data.diff(resource.data).affectedKeys());
       allow delete: if false;
 
-      match /{sub}/{docId} {
-        allow read, write: if isMember();
+      // ---- invites: the joining secret
+
+      function validInvite(d) {
+        return hasShape(d, ['householdName', 'createdBy', 'createdByName', 'createdAt', 'expiresAt'], [])
+          && isStr(d.householdName, 60)                          // LIMITS.householdName
+          && d.createdBy == request.auth.uid
+          && isStr(d.createdByName, 40)                          // LIMITS.memberName
+          && d.createdAt is int
+          && d.expiresAt is int
+          && d.expiresAt > nowMs()
+          // LIMITS.inviteDays, plus 5 minutes for clock skew
+          && d.expiresAt <= nowMs() + 7 * 86400000 + 300000;
       }
+
+      match /invites/{code} {
+        allow get: if signedIn();
+        allow list, delete: if isMember();
+        allow create: if isMember() && isAutoId(code) && validInvite(request.resource.data);
+        allow update: if false;
+      }
+
+      // ---- events
+
+      function validRecurrence(r) {
+        return r == null || (r is map
+          && hasShape(r, ['freq', 'interval'], ['byWeekday', 'until'])
+          && r.freq in ['daily', 'weekly', 'monthly', 'yearly']
+          && isIntIn(r.interval, 1, 99)
+          && (!('byWeekday' in r)
+              || (isList(r.byWeekday, 7) && r.byWeekday.hasOnly([0, 1, 2, 3, 4, 5, 6])))
+          && optDateOrNull(r, 'until'));
+      }
+
+      function validEvent(d) {
+        return hasShape(d, ['title', 'date', 'memberIds'],
+                           ['endDate', 'startTime', 'endTime', 'recurrence', 'exdates',
+                            'reminderMins', 'location', 'notes', 'createdBy', 'updatedAt'])
+          && isText(d.title, 200)                                // LIMITS.title
+          && isDate(d.date)
+          && optDateOrNull(d, 'endDate')
+          && optTimeOrNull(d, 'startTime')
+          && optTimeOrNull(d, 'endTime')
+          && isList(d.memberIds, 12)                             // LIMITS.members
+          && validRecurrence(d.get('recurrence', null))
+          && optList(d, 'exdates', 400)                          // LIMITS.exdates
+          && optIntOrNull(d, 'reminderMins')
+          && optStr(d, 'location', 200)                          // LIMITS.place
+          && optStr(d, 'notes', 2000)                            // LIMITS.notes
+          && optStrOrNull(d, 'createdBy', 128)
+          && optInt(d, 'updatedAt');
+      }
+
+      match /events/{id} {
+        allow read, delete: if isMember();
+        allow create, update: if isMember() && validEvent(request.resource.data);
+      }
+
+      // ---- shopping list
+
+      function validShoppingItem(d) {
+        return hasShape(d, ['name', 'done', 'createdAt'], ['addedBy', 'doneAt'])
+          && isText(d.name, 100)                                 // LIMITS.shoppingItem
+          && d.done is bool
+          && optStrOrNull(d, 'addedBy', 40)
+          && d.createdAt is int
+          && optIntOrNull(d, 'doneAt');
+      }
+
+      match /shopping/{id} {
+        allow read, delete: if isMember();
+        allow create, update: if isMember() && validShoppingItem(request.resource.data);
+      }
+
+      // ---- tasks
+
+      function validRepeat(r) {
+        return r == null || (r is map
+          && hasShape(r, ['every', 'unit'], [])
+          && isIntIn(r.every, 1, 365)
+          && r.unit in ['day', 'week', 'month']);
+      }
+
+      function validTask(d) {
+        return hasShape(d, ['title', 'memberIds', 'done', 'createdAt'],
+                           ['due', 'repeat', 'lastDoneAt', 'lastDoneBy', 'notes'])
+          && isText(d.title, 200)                                // LIMITS.title
+          && isList(d.memberIds, 12)                             // LIMITS.members
+          && optDateOrNull(d, 'due')
+          && validRepeat(d.get('repeat', null))
+          && d.done is bool
+          && optIntOrNull(d, 'lastDoneAt')
+          && optStrOrNull(d, 'lastDoneBy', 40)
+          && optStr(d, 'notes', 2000)                            // LIMITS.notes
+          && d.createdAt is int;
+      }
+
+      match /tasks/{id} {
+        allow read, delete: if isMember();
+        allow create, update: if isMember() && validTask(request.resource.data);
+      }
+
+      // ---- weekly menu: one document per day, id 'YYYY-MM-DD'
+
+      match /menu/{day} {
+        allow read, delete: if isMember();
+        allow create, update: if isMember()
+          && isDate(day)
+          && hasShape(request.resource.data, [], ['lunch', 'dinner'])
+          && optStr(request.resource.data, 'lunch', 200)         // LIMITS.dish
+          && optStr(request.resource.data, 'dinner', 200);
+      }
+
+      // ---- key dates
+
+      function validKeyDate(d) {
+        return hasShape(d, ['title', 'kind', 'date', 'repeat', 'remindDays'],
+                           ['memberIds', 'amount', 'notes'])
+          && isText(d.title, 200)                                // LIMITS.title
+          && isText(d.kind, 20)
+          && isDate(d.date)
+          && d.repeat in ['none', 'monthly', 'yearly']
+          && isIntIn(d.remindDays, 0, 365)
+          && optList(d, 'memberIds', 12)
+          && (d.get('amount', null) == null || isIntIn(d.amount, 0, 100000000))   // LIMITS.amountCents
+          && optStr(d, 'notes', 2000);                           // LIMITS.notes
+      }
+
+      match /dates/{id} {
+        allow read, delete: if isMember();
+        allow create, update: if isMember() && validKeyDate(request.resource.data);
+      }
+
+      // ---- expenses
+
+      function validExpense(d) {
+        return hasShape(d, ['description', 'amount', 'paidBy', 'splitAmong', 'date', 'category', 'kind', 'createdAt'],
+                           ['createdBy'])
+          && isStr(d.description, 200)                           // LIMITS.title
+          && isIntIn(d.amount, 1, 100000000)                     // LIMITS.amountCents
+          && isText(d.paidBy, 40)
+          && d.splitAmong is list && d.splitAmong.size() >= 1 && d.splitAmong.size() <= 12
+          && isDate(d.date)
+          && isText(d.category, 20)                              // legacy Spanish ids exist
+          && d.kind in ['expense', 'settle']
+          && optStrOrNull(d, 'createdBy', 128)
+          && d.createdAt is int;
+      }
+
+      match /expenses/{id} {
+        allow read, delete: if isMember();
+        allow create, update: if isMember() && validExpense(request.resource.data);
+      }
+
+      // ---- notes
+
+      function validNote(d) {
+        return hasShape(d, ['title', 'body', 'pinned', 'color', 'updatedAt'], ['updatedBy'])
+          && isStr(d.title, 200)                                 // LIMITS.title
+          && isStr(d.body, 5000)                                 // LIMITS.noteBody
+          && d.pinned is bool
+          && isColor(d.color)
+          && d.updatedAt is int
+          && optStrOrNull(d, 'updatedBy', 40);
+      }
+
+      match /notes/{id} {
+        allow read, delete: if isMember();
+        allow create, update: if isMember() && validNote(request.resource.data);
+      }
+
+      // ---- per-user preferences: each member only sees and writes their own
+
+      function validPrefs(d) {
+        return hasShape(d, ['dashboard', 'updatedAt'], [])
+          && d.dashboard is map
+          && hasShape(d.dashboard, ['order', 'hidden'], [])
+          && isList(d.dashboard.order, 30)                       // LIMITS.dashboardWidgets
+          && isList(d.dashboard.hidden, 30)
+          && d.updatedAt is int;
+      }
+
+      match /prefs/{uid} {
+        allow read, delete: if isMember() && uid == request.auth.uid;
+        allow create, update: if isMember() && uid == request.auth.uid
+          && validPrefs(request.resource.data);
+      }
+
+      // ---- meta: shopping suggestions (client); notifier state is server-only
+
+      match /meta/{docId} {
+        allow read, delete: if docId == 'shopping' && isMember();
+        allow create, update: if docId == 'shopping' && isMember()
+          && hasShape(request.resource.data, ['freq'], [])
+          && request.resource.data.freq is map
+          && request.resource.data.freq.size() <= 300;           // LIMITS.shoppingFreq
+      }
+
+      // ---- push subscriptions: written by their owner, read only by the Cloud Functions
+
+      function validDevice(d) {
+        let sub = d.subscription;
+        return hasShape(d, ['uid', 'subscription'], ['ua', 'createdAt', 'lang'])
+          && d.uid == request.auth.uid
+          && sub is map
+          && hasShape(sub, ['endpoint', 'keys'], [])
+          && isStr(sub.endpoint, 2048)
+          // Known Web Push services only (the notifier POSTs to this URL).
+          && sub.endpoint.matches('https://(fcm[.]googleapis[.]com|android[.]googleapis[.]com|updates[.]push[.]services[.]mozilla[.]com|web[.]push[.]apple[.]com|[A-Za-z0-9-]+[.]notify[.]windows[.]com)/.+')
+          && sub['keys'] is map
+          && hasShape(sub['keys'], ['p256dh', 'auth'], [])
+          && isText(sub['keys'].p256dh, 200)
+          && isText(sub['keys'].auth, 100)
+          && optStr(d, 'ua', 300)
+          && optInt(d, 'createdAt')
+          && (!('lang' in d) || d.lang in ['es', 'en']);
+      }
+
+      match /devices/{id} {
+        allow read: if false;
+        allow create: if isMember() && validDevice(request.resource.data);
+        allow update: if isMember()
+          && resource.data.uid == request.auth.uid
+          && validDevice(request.resource.data);
+        // Own devices only; deleting one that doesn't exist is a harmless no-op
+        // (the app deletes on sign-out without checking first).
+        allow delete: if signedIn() && (resource == null || resource.data.uid == request.auth.uid);
+      }
+
+      // ---- activity feed ("Sam added milk"): create-only, read by the Cloud Functions
+
+      function validActivity(d) {
+        return hasShape(d, ['actorUid', 'actorName', 'kind', 'text', 'createdAt', 'notified'], [])
+          && d.actorUid == request.auth.uid
+          && isStr(d.actorName, 40)                              // LIMITS.memberName
+          && d.kind in ['shopping', 'event', 'task', 'note', 'expense', 'date', 'menu']
+          && isStr(d.text, 300)                                  // LIMITS.activityText
+          && d.notified == false
+          && d.createdAt is int
+          && d.createdAt >= nowMs() - 3600000
+          && d.createdAt <= nowMs() + 3600000;
+      }
+
+      match /activity/{id} {
+        allow create: if isMember() && validActivity(request.resource.data);
+        allow read, update, delete: if false;
+      }
+
+      // notifyLog/{key}: no client access (no rule, so denied).
     }
   }
 }

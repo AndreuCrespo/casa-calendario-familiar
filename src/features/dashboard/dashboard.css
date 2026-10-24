@@ -1,0 +1,357 @@
+/* Home screen. Each card sits in a .w wrapper; its width (m-* on phones, d-*
+   on large screens) comes from packSpans(), which keeps the chosen order
+   without leaving gaps. */
+
+.dash {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+}
+.dash > * {
+  min-width: 0;
+}
+.w {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.w > * {
+  flex: 1;
+}
+.w.center-items > * {
+  flex: none;
+}
+.m-1 {
+  grid-column: span 1;
+}
+.m-2 {
+  grid-column: span 2;
+}
+
+.next {
+  border-radius: 22px;
+  padding: 16px 18px;
+  background: var(--green);
+  color: var(--on-green);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  text-align: left;
+}
+.next .label {
+  color: inherit;
+  opacity: 0.85;
+}
+.next-title {
+  font-size: 21px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  line-height: 1.2;
+}
+.next-when {
+  font-weight: 600;
+  opacity: 0.9;
+  font-size: 14px;
+}
+.next .pill {
+  background: var(--on-green);
+  color: var(--green);
+}
+.next.idle {
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border);
+}
+.next.idle .label {
+  color: var(--muted);
+  opacity: 1;
+}
+
+.week {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 152px;
+  gap: 9px;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  scrollbar-width: none;
+  margin: 0 -16px;
+  padding: 2px 16px 6px;
+}
+.week::-webkit-scrollbar {
+  display: none;
+}
+.wday {
+  scroll-snap-align: start;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  padding: 11px 11px 10px;
+  min-height: 230px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  box-shadow: var(--shadow);
+}
+.wday-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  font-weight: 800;
+}
+.wday-head .n {
+  font-size: 20px;
+  letter-spacing: -0.02em;
+}
+.wday.today .wday-head {
+  color: var(--accent);
+}
+.wday-wx {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11.5px;
+  color: var(--muted);
+  font-weight: 700;
+  margin-top: -4px;
+}
+.wday-events {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  flex: 1;
+}
+.wev {
+  border-left: 3px solid var(--c, var(--border-strong));
+  padding-left: 7px;
+  font-size: 12.5px;
+  line-height: 1.25;
+  text-align: left;
+}
+.wev .t {
+  color: var(--muted);
+  font-weight: 700;
+  font-size: 11.5px;
+}
+.wev .n {
+  font-weight: 650;
+}
+.wev.allday {
+  border-left: 0;
+  padding: 3px 8px;
+  border-radius: 7px;
+  background: color-mix(in srgb, var(--c, var(--muted)) 18%, transparent);
+  color: color-mix(in srgb, var(--c, var(--text)) 60%, var(--text));
+  font-weight: 750;
+  font-size: 11.5px;
+}
+.wmenu {
+  margin-top: auto;
+  background: var(--surface-2);
+  border-radius: 10px;
+  padding: 7px 8px;
+  font-size: 11.5px;
+  line-height: 1.3;
+  color: var(--text-2);
+}
+
+/* Agenda and today's meals */
+.agenda-day {
+  margin-top: 12px;
+}
+.agenda-day + .agenda-day {
+  border-top: 1px solid var(--border);
+  padding-top: 10px;
+}
+.agenda-head {
+  font-size: 13.5px;
+  margin-bottom: 4px;
+}
+.agenda-head .muted {
+  font-weight: 600;
+}
+.agenda-empty {
+  padding: 4px 0 2px;
+}
+.agenda-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  text-align: left;
+  padding: 7px 0;
+  min-height: 44px;
+}
+.agenda-item .bar {
+  width: 4px;
+  align-self: stretch;
+  border-radius: 4px;
+  background: var(--c, var(--border-strong));
+  flex: none;
+}
+.agenda-item .bar.multi {
+  background: linear-gradient(var(--c1), var(--c1) 50%, var(--c2) 50%);
+}
+.agenda-time {
+  width: 54px;
+  flex: none;
+  font-size: 12.5px;
+  font-weight: 750;
+  color: var(--muted);
+}
+.agenda-item.past {
+  opacity: 0.5;
+}
+.menu-dish {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  line-height: 1.3;
+}
+
+/* Electricity mini chart */
+.price {
+  font-size: 22px;
+  font-weight: 800;
+}
+.mini-bars {
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 46px;
+}
+.mini-bars i {
+  flex: 1;
+  border-radius: 2px 2px 0 0;
+  display: block;
+  min-height: 3px;
+}
+.mini-bars i.now {
+  outline: 2px solid var(--text);
+  outline-offset: 1px;
+}
+.mini-bars i.past {
+  opacity: 0.35;
+}
+
+/* Pinned note */
+.note-card {
+  background: var(--nc);
+  border-color: transparent;
+}
+.note-card .label {
+  color: var(--note-ink-3);
+}
+.note-ink {
+  color: var(--note-ink);
+}
+.note-ink-2 {
+  color: var(--note-ink-2);
+  margin-top: 2px;
+}
+:root[data-theme='dark'] .note-card {
+  filter: brightness(0.82) saturate(0.9);
+}
+
+@media (min-width: 900px) {
+  .dash {
+    grid-template-columns: repeat(12, minmax(0, 1fr));
+    gap: 14px;
+  }
+  .d-1 {
+    grid-column: span 4;
+  }
+  .d-2 {
+    grid-column: span 8;
+  }
+  .d-3 {
+    grid-column: span 12;
+  }
+  .dash .hero {
+    flex-direction: row;
+    align-items: center;
+    padding: 26px 28px;
+  }
+  .dash .hero-top {
+    flex: 1;
+  }
+  .dash .hero-clock {
+    font-size: 96px;
+  }
+  .dash .hero-days {
+    flex: 1.2;
+  }
+  .next {
+    justify-content: center;
+  }
+  .next-title {
+    font-size: 25px;
+  }
+  .week {
+    grid-auto-flow: row;
+    grid-template-columns: repeat(7, 1fr);
+    margin: 0;
+    padding: 0;
+    overflow: visible;
+  }
+  .wday {
+    min-height: 300px;
+  }
+}
+
+/* ---------- customize sheet ---------- */
+
+.dash-editor {
+  overflow: visible;
+}
+.dash-editor .list-item {
+  position: relative;
+  background: var(--surface);
+  padding-left: 6px;
+}
+.dash-editor .list-item:first-child {
+  border-radius: var(--radius) var(--radius) 0 0;
+}
+.dash-editor .list-item:last-child {
+  border-radius: 0 0 var(--radius) var(--radius);
+}
+.dash-editor .list-item.shifting {
+  transition: transform 0.15s ease;
+}
+.dash-editor .list-item.dragging {
+  z-index: 3;
+  border-radius: 14px;
+  box-shadow: var(--shadow-lg);
+}
+.dash-editor .list-item.off .item-title,
+.dash-editor .list-item.off .dash-editor-ic {
+  opacity: 0.5;
+}
+.drag-handle {
+  width: 34px;
+  height: 44px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  color: var(--muted);
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  border-radius: 10px;
+}
+.dragging .drag-handle {
+  cursor: grabbing;
+}
+.dash-editor-ic {
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  background: var(--surface-3);
+  color: var(--text-2);
+}

@@ -1,0 +1,44 @@
+.menu-day {
+  display: grid;
+  grid-template-columns: 54px 1fr;
+  gap: 10px;
+  align-items: start;
+  padding: 12px 14px;
+}
+.menu-day.today .cal-day-num .d,
+.menu-day.today .cal-day-num .n {
+  color: var(--accent);
+}
+.menu-inputs {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.menu-inputs label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.menu-inputs label > span {
+  width: 44px;
+  font-size: 11.5px;
+  font-weight: 800;
+  color: var(--muted);
+  text-transform: uppercase;
+  flex: none;
+}
+.menu-inputs input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  padding: 7px 8px;
+  border-radius: 9px;
+  font-size: 16px;
+}
+.menu-inputs input:focus {
+  background: var(--surface-2);
+}
+.menu-inputs input::placeholder {
+  color: var(--muted);
+}

@@ -1,0 +1,79 @@
+/* Design tokens. The theme is resolved in JS (core/theme.ts) and written to
+   <html data-theme>, so the dark palette is defined once. Text colors meet
+   WCAG AA (4.5:1) on the backgrounds they're used on. */
+
+:root {
+  --bg: #f4eee5;
+  --surface: #fffcf7;
+  --surface-2: #f8f2e9;
+  --surface-3: #eee5d8;
+  --border: #e7ddcf;
+  --border-strong: #cfc3b2;
+  --text: #24221f;
+  --text-2: #5c564e;
+  --muted: #736a5f;
+  --accent: #c63d31;
+  --accent-soft: #fbe1dc;
+  --on-accent: #fff;
+  --hero-1: #1f2850;
+  --hero-2: #3b4787;
+  --green: #24854a;
+  --green-soft: #dcf1e3;
+  --on-green: #fff;
+  --amber: #e09a2d;
+  --amber-text: #9a6212;
+  --amber-soft: #faebd0;
+  --red: #c53939;
+  --blue: #2f65d0;
+  --blue-soft: #e1ebfd;
+  --focus: #2f65d0;
+  --note-ink: #2a2620;
+  --note-ink-2: #4a443b;
+  --note-ink-3: #6e6558;
+  --radius: 20px;
+  --radius-sm: 13px;
+  --shadow: 0 1px 2px rgba(70, 45, 10, 0.04), 0 6px 20px rgba(70, 45, 10, 0.05);
+  --shadow-lg: 0 10px 40px rgba(40, 25, 5, 0.18);
+  --nav-h: 62px;
+  --rail-w: 88px;
+  --safe-t: env(safe-area-inset-top, 0px);
+  --safe-b: env(safe-area-inset-bottom, 0px);
+  --font: 'Manrope Variable', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  color-scheme: light;
+}
+
+:root[data-theme='dark'] {
+  --bg: #141519;
+  --surface: #1c1e24;
+  --surface-2: #22252c;
+  --surface-3: #2c2f38;
+  --border: #2d3039;
+  --border-strong: #454956;
+  --text: #f2efea;
+  --text-2: #c4beb5;
+  --muted: #9a958c;
+  --accent: #ff6b5b;
+  --accent-soft: #3b2420;
+  --on-accent: #2a1512;
+  --hero-1: #1b2246;
+  --hero-2: #2d3874;
+  --green: #44bd75;
+  --green-soft: #1c3426;
+  --on-green: #0f2418;
+  --amber: #f0b04b;
+  --amber-text: #f0b04b;
+  --amber-soft: #3a301d;
+  --red: #ff7a7a;
+  --blue: #6b9bff;
+  --blue-soft: #1d2a44;
+  --focus: #8fb4ff;
+  --shadow: none;
+  color-scheme: dark;
+}
+
+/* Before the script sets the theme: avoid a white flash in dark mode. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) {
+    background: #141519;
+  }
+}

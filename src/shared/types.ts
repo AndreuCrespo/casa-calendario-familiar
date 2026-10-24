@@ -1,6 +1,7 @@
 // Data model shared by the app and the notifier.
 // All dates are local 'YYYY-MM-DD' strings and times are 'HH:mm', in the
 // household's time zone (avoids trouble with daylight-saving changes).
+import type { DateStr, TimeStr } from './dates';
 
 /** UI / notification language. */
 export type Lang = 'es' | 'en';
@@ -18,12 +19,26 @@ export interface Member {
 export interface Household {
   id: string;
   name: string;
+  /** Accounts in the household. One may have no `members` entry yet (joined, not claimed). */
   memberUids: string[];
   members: Member[];
   timezone: string;
   location?: { name: string; lat: number; lon: number } | null;
   notify?: NotifySettings;
+  /** Invite code each account joined with, by uid (households/{id}/invites/{code}). */
+  joinedWith?: Record<string, string>;
   createdAt: number;
+}
+
+/** households/{hid}/invites/{code}: a link to join the household, valid until `expiresAt`. */
+export interface Invite {
+  /** The invite code (document id). */
+  id: string;
+  householdName: string;
+  createdBy: string; // uid
+  createdByName: string;
+  createdAt: number;
+  expiresAt: number;
 }
 
 export interface NotifySettings {
@@ -38,20 +53,20 @@ export interface Recurrence {
   freq: Freq;
   interval: number;
   byWeekday?: number[]; // 0 = Monday … 6 = Sunday
-  until?: string | null;
+  until?: DateStr | null;
 }
 
 export interface CalEvent {
   id: string;
   title: string;
-  date: string;
-  endDate?: string | null; // inclusive, for multi-day events
-  startTime?: string | null; // null => all day
-  endTime?: string | null;
+  date: DateStr;
+  endDate?: DateStr | null; // inclusive, for multi-day events
+  startTime?: TimeStr | null; // null => all day
+  endTime?: TimeStr | null;
   memberIds: string[];
   recurrence?: Recurrence | null;
-  exdates?: string[];
-  reminderMins?: number | null; // minutes before (all-day events: relative to 09:00)
+  exdates?: DateStr[];
+  reminderMins?: number | null; // minutes before (all-day events: relative to 09:00), see reminders.ts
   location?: string;
   notes?: string;
   createdBy?: string;
@@ -73,7 +88,7 @@ export interface Task {
   id: string;
   title: string;
   memberIds: string[];
-  due?: string | null;
+  due?: DateStr | null;
   repeat?: { every: number; unit: RepeatUnit } | null;
   done: boolean;
   lastDoneAt?: number | null;
@@ -83,7 +98,7 @@ export interface Task {
 }
 
 export interface MenuDay {
-  id: string; // 'YYYY-MM-DD'
+  id: DateStr;
   lunch?: string;
   dinner?: string;
 }
@@ -94,7 +109,7 @@ export interface KeyDate {
   id: string;
   title: string;
   kind: KeyDateKind;
-  date: string; // for birthdays, the date of birth
+  date: DateStr; // for birthdays, the date of birth
   repeat: 'none' | 'monthly' | 'yearly';
   remindDays: number;
   memberIds?: string[];
@@ -108,7 +123,7 @@ export interface Expense {
   amount: number; // cents
   paidBy: string; // member id
   splitAmong: string[]; // member ids (for 'settle', the one who receives)
-  date: string;
+  date: DateStr;
   category: string;
   kind: 'expense' | 'settle';
   createdBy?: string;
@@ -125,6 +140,7 @@ export interface Note {
   updatedBy?: string;
 }
 
+/** households/{hid}/devices/{first 12 bytes of sha256(endpoint), hex}: one browser with push on. */
 export interface Device {
   id: string;
   uid: string;
@@ -137,6 +153,7 @@ export interface Device {
 
 export type ActivityKind = 'shopping' | 'event' | 'task' | 'note' | 'expense' | 'date' | 'menu';
 
+/** households/{hid}/activity/{id}: one thing someone added, written by the app and notified by the server. */
 export interface Activity {
   id: string;
   actorUid: string;

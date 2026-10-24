@@ -1,13 +1,29 @@
 // Dependency-free date utilities. A date is 'YYYY-MM-DD' and the math is
 // done in UTC so daylight-saving changes never shift days.
 
+/** Local date, 'YYYY-MM-DD'. */
 export type DateStr = string;
+/** Local time, 'HH:mm' (24 h). */
+export type TimeStr = string;
+
+const DATE_RE = /^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/;
+const TIME_RE = /^([01]?\d|2[0-3]):[0-5]\d$/;
+
+/** Is it a well-formed 'YYYY-MM-DD'? (A 31st in a 30-day month isn't caught.) */
+export const isDateStr = (x: unknown): x is DateStr => typeof x === 'string' && DATE_RE.test(x);
+/** Is it a well-formed 'HH:mm' (or 'H:mm')? */
+export const isTimeStr = (x: unknown): x is TimeStr => typeof x === 'string' && TIME_RE.test(x);
 
 const pad = (n: number) => String(n).padStart(2, '0');
 
+export function parts(d: DateStr) {
+  const [y = Number.NaN, m = Number.NaN, day = Number.NaN] = d.split('-').map(Number);
+  return { y, m, d: day };
+}
+
 export function toUTC(d: DateStr): Date {
-  const [y, m, day] = d.split('-').map(Number);
-  return new Date(Date.UTC(y, m - 1, day));
+  const p = parts(d);
+  return new Date(Date.UTC(p.y, p.m - 1, p.d));
 }
 
 export function fromUTC(dt: Date): DateStr {
@@ -16,11 +32,6 @@ export function fromUTC(dt: Date): DateStr {
 
 export function ymd(y: number, m: number, d: number): DateStr {
   return `${y}-${pad(m)}-${pad(d)}`;
-}
-
-export function parts(d: DateStr) {
-  const [y, m, day] = d.split('-').map(Number);
-  return { y, m, d: day };
 }
 
 export function addDays(d: DateStr, n: number): DateStr {
@@ -66,8 +77,12 @@ export function isoWeek(d: DateStr): number {
   return Math.floor((dt.getTime() - jan1.getTime()) / 86400000 / 7) + 1;
 }
 
-export function minDate(a: DateStr, b: DateStr) { return a < b ? a : b; }
-export function maxDate(a: DateStr, b: DateStr) { return a > b ? a : b; }
+export function minDate(a: DateStr, b: DateStr) {
+  return a < b ? a : b;
+}
+export function maxDate(a: DateStr, b: DateStr) {
+  return a > b ? a : b;
+}
 
 // ---------- time zones ----------
 
@@ -76,9 +91,14 @@ function fmtFor(tz: string) {
   let f = fmtCache.get(tz);
   if (!f) {
     f = new Intl.DateTimeFormat('en-US', {
-      timeZone: tz, hourCycle: 'h23',
-      year: 'numeric', month: '2-digit', day: '2-digit',
-      hour: '2-digit', minute: '2-digit', second: '2-digit',
+      timeZone: tz,
+      hourCycle: 'h23',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
     });
     fmtCache.set(tz, f);
   }
@@ -99,9 +119,9 @@ export function zonedParts(ts: number, tz: string) {
 }
 
 function offsetAt(ts: number, tz: string): number {
-  const p = zonedParts(ts, tz);
-  const [y, m, d] = p.date.split('-').map(Number);
-  const asUTC = Date.UTC(y, m - 1, d, p.hour, p.minute, p.second);
+  const z = zonedParts(ts, tz);
+  const p = parts(z.date);
+  const asUTC = Date.UTC(p.y, p.m - 1, p.d, z.hour, z.minute, z.second);
   return asUTC - Math.floor(ts / 1000) * 1000;
 }
 
@@ -110,10 +130,9 @@ function offsetAt(ts: number, tz: string): number {
  * As in RFC 5545: a repeated time (autumn) is the first of the two, and a
  * non-existent time (spring) is moved forward (02:30 → 03:30), in any zone.
  */
-export function zonedToUtc(date: DateStr, time: string, tz: string): number {
-  const [y, m, d] = date.split('-').map(Number);
-  const [hh, mm] = time.split(':').map(Number);
-  const guess = Date.UTC(y, m - 1, d, hh, mm);
+export function zonedToUtc(date: DateStr, time: TimeStr, tz: string): number {
+  const p = parts(date);
+  const guess = Date.UTC(p.y, p.m - 1, p.d) + timeToMinutes(time) * 60_000;
   const before = offsetAt(guess - 86400000, tz); // offset before a possible change
   const tsBefore = guess - before;
   if (offsetAt(tsBefore, tz) === before) return tsBefore;
@@ -123,11 +142,12 @@ export function zonedToUtc(date: DateStr, time: string, tz: string): number {
   return tsBefore; // gap: with the earlier offset it lands right after the change
 }
 
+/** Today's date in a time zone (`now` defaults to the current instant). */
 export function todayIn(tz: string, now = Date.now()): DateStr {
   return zonedParts(now, tz).date;
 }
 
-export function timeToMinutes(t: string): number {
-  const [h, m] = t.split(':').map(Number);
+export function timeToMinutes(t: TimeStr): number {
+  const [h = Number.NaN, m = Number.NaN] = t.split(':').map(Number);
   return h * 60 + m;
 }

@@ -3,6 +3,10 @@ dist
 dev-dist
 .firebase
 *.log
+# Firebase CLI and emulator logs (already covered by *.log, listed explicitly)
+firebase-debug*.log
+firestore-debug.log
+ui-debug.log
 
 # Local tool settings
 .claude/
@@ -15,6 +19,9 @@ service-account*.json
 *firebase-adminsdk*.json
 *.pem
 *.key
+# Functions emulator secrets and legacy runtime config
+.secret.local
+.runtimeconfig.json
 
 # Everyone's own Firebase project (firebase use --add)
 .firebaserc

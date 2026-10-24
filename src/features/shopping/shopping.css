@@ -1,0 +1,26 @@
+.add-bar {
+  display: flex;
+  gap: 8px;
+  position: sticky;
+  top: calc(var(--safe-t) + 8px);
+  z-index: 5;
+  background: var(--bg);
+  padding: 4px 0 10px;
+}
+.add-bar .input {
+  background: var(--surface);
+}
+.suggest {
+  display: flex;
+  gap: 7px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  margin: 0 -16px 14px;
+  padding: 0 16px;
+}
+.suggest::-webkit-scrollbar {
+  display: none;
+}
+.suggest .chip {
+  flex: none;
+}

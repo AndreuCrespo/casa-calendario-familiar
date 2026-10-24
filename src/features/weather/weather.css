@@ -1,0 +1,65 @@
+.wx-hero {
+  align-items: stretch;
+}
+.wx-hero .hero-clock {
+  font-size: 64px;
+}
+.wx-day {
+  width: 54px;
+}
+.wx-pop {
+  color: var(--blue);
+  font-weight: 700;
+  width: 42px;
+  text-align: right;
+}
+.wx-temps {
+  width: 70px;
+  text-align: right;
+}
+
+.chart-card {
+  padding: 12px 0;
+}
+.chart-wrap {
+  width: 100%;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.chart-wrap svg {
+  display: block;
+}
+.wx-fill-top {
+  stop-color: #f5b638;
+  stop-opacity: 0.35;
+}
+.wx-fill-bottom {
+  stop-color: #f5b638;
+  stop-opacity: 0;
+}
+.wx-line {
+  fill: none;
+  stroke: #e9a23b;
+  stroke-width: 2.5;
+}
+.wx-dot {
+  fill: #e9a23b;
+}
+.wx-temp,
+.wx-rain,
+.wx-hour {
+  text-anchor: middle;
+  font-weight: 700;
+}
+.wx-temp {
+  font-size: 12px;
+  fill: var(--text);
+}
+.wx-rain {
+  font-size: 10.5px;
+  fill: var(--blue);
+}
+.wx-hour {
+  font-size: 11px;
+  fill: var(--muted);
+}

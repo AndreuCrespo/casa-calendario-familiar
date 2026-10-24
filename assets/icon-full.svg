@@ -1,4 +1,5 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" role="img" aria-labelledby="t">
+  <title id="t">Casa</title>
   <!-- Full-bleed version (no corners) for iPhone and the Android adaptive icon:
        the OS applies its own mask. The drawing fits in the safe zone (80%). -->
   <rect width="100" height="100" fill="#FAEBD0"/>

@@ -4,10 +4,13 @@
 import { writeFile } from 'node:fs/promises';
 import sharp from 'sharp';
 
-const render = (src, size) => sharp(src, { density: Math.ceil((72 * size) / 100) * 2 })
-  .resize(size, size)
-  .png({ compressionLevel: 9 });
+/** @param {string} src @param {number} size */
+const render = (src, size) =>
+  sharp(src, { density: Math.ceil((72 * size) / 100) * 2 })
+    .resize(size, size)
+    .png({ compressionLevel: 9 });
 
+/** @type {[string, string, number][]} */
 const jobs = [
   ['public/favicon.svg', 'public/pwa-64x64.png', 64],
   ['public/favicon.svg', 'public/pwa-192x192.png', 192],

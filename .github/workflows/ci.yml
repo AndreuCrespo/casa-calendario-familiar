@@ -1,0 +1,56 @@
+# Checks every push and pull request. Deploys are done by hand (npm run deploy).
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            functions/package-lock.json
+
+      # The Firestore emulator (rules tests) runs on Java.
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/firebase/emulators
+          key: firebase-emulators-${{ runner.os }}-15
+
+      - run: npm ci
+      - run: npm ci --prefix functions
+
+      - name: Lint and format
+        run: npm run lint
+      - name: Types
+        run: npm run typecheck
+      - name: Unit tests
+        run: npm test
+      - name: Cloud Functions (types, tests, build)
+        run: npm --prefix functions run check
+      - name: Firestore rules tests
+        run: npx -y firebase-tools@15 emulators:exec --only firestore --project demo-casa "npx vitest run --config vitest.rules.config.ts"
+      - name: Build (demo mode, no Firebase config)
+        run: npx vite build

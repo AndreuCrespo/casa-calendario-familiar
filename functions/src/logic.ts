@@ -1,50 +1,64 @@
 // Pure notifier logic: decides WHICH notifications to send on each run from a
 // household's data. No I/O, no Firestore, no network and no npm dependencies
 // (only the app's shared modules), so it can be tested with sample data (see
-// test.ts). The wording of each message, per language, lives in i18n.ts.
+// logic.test.ts).
+//
+// Every message is language-neutral (dedupe key, tag, link, audience) and
+// renders its title and body per language with the texts in i18n.ts, so all
+// the devices of a household get the same notifications, each in its language.
+import { addDays, type DateStr, diffDays, isTimeStr, parts, zonedParts, zonedToUtc } from '../../src/shared/dates';
+import { LIMITS } from '../../src/shared/limits';
+import { expandEvents, nextKeyDate, type Occurrence, occursOn } from '../../src/shared/recurrence';
+import { ALLDAY_BASE_MIN, MAX_REMINDER_MINS } from '../../src/shared/reminders';
+import { type Route, routePath } from '../../src/shared/routes';
+import { clip } from '../../src/shared/text';
 import type {
-  Activity, ActivityKind, CalEvent, Device, Household, KeyDate, KeyDateKind, Member, MenuDay,
-  NotifySettings, Task,
+  Activity,
+  ActivityKind,
+  CalEvent,
+  Household,
+  KeyDate,
+  KeyDateKind,
+  Lang,
+  Member,
+  MenuDay,
+  NotifySettings,
+  Task,
 } from '../../src/shared/types';
-import {
-  addDays, diffDays, parts, zonedParts, zonedToUtc, type DateStr,
-} from '../../src/shared/dates';
-import { expandEvents, nextKeyDate, occursOn, type Occurrence } from '../../src/shared/recurrence';
-import { DEFAULT_LANG, fmtTime, texts, toLang, type Lang, type Texts } from './i18n';
-
-export type { Lang };
+import { fmtTime, type Texts, texts } from './i18n';
 
 // ---------- constants ----------
 
 export const MINUTE = 60_000;
-export const HOUR = 60 * MINUTE;
+const HOUR = 60 * MINUTE;
 export const DAY = 24 * HOUR;
 
-export const DEFAULT_TZ = 'Europe/Madrid';
-/** Catch up on reminders from the last 45 min at most (delayed cron). */
-export const MAX_CATCHUP = 45 * MINUTE;
-/** With no known previous run, look back 15 min. */
-export const FIRST_RUN_LOOKBACK = 15 * MINUTE;
+const DEFAULT_TZ = 'Europe/Madrid';
+/**
+ * A reminder is sent up to this long after it was due (late or failed runs);
+ * the record of sent keys keeps it from repeating.
+ */
+const REMINDER_CATCHUP = 45 * MINUTE;
+/** …but not once its (timed) event started more than this long ago. */
+const REMINDER_GRACE_AFTER_START = 10 * MINUTE;
+/** Days after today whose events can have a reminder due today (the longest option, rounded up). */
+export const REMINDER_LOOKAHEAD_DAYS = Math.ceil(MAX_REMINDER_MINS / 1440) + 1;
 /** Activity older than this is no longer notified (only marked). */
-export const ACTIVITY_MAX_AGE = 12 * HOUR;
+const ACTIVITY_MAX_AGE = 12 * HOUR;
 /** Local hour from which key dates are announced. */
 export const KEYDATE_HOUR = 9;
 /** The daily summary can be sent during these many hours from `dailyHour`. */
-export const DAILY_WINDOW_HOURS = 3;
-/** Reminders of all-day events are relative to this local time. */
-export const ALLDAY_BASE_MIN = 9 * 60;
+const DAILY_WINDOW_HOURS = 3;
 
-/** App screens (hash routes) that notifications open. */
-export const URLS = {
-  home: '/#/',
-  calendar: '/#/calendar',
-  shopping: '/#/shopping',
-  tasks: '/#/tasks',
-  dates: '/#/dates',
-  expenses: '/#/expenses',
-  notes: '/#/notes',
-  menu: '/#/menu',
-} as const;
+/** How long push services keep a notification for an offline device (seconds). */
+const ACTIVITY_TTL_S = 60 * 60;
+const MIN_TTL_S = 5 * 60;
+
+const MAX_DAILY_EVENTS = 6;
+const MAX_TASK_TITLES = 3;
+const MAX_ACTIVITY_ITEMS = 8;
+/** Each item of an activity digest ("milk", "Dentist") is cut to this many characters. */
+const ACTIVITY_ITEM_CHARS = 80;
 
 // ---------- types ----------
 
@@ -53,16 +67,25 @@ export type Audience = 'all' | { excludeUid: string };
 
 export type MessageKind = 'reminder' | 'keydate' | 'daily' | 'activity';
 
-export interface OutMessage {
-  /** Dedupe key (stored in notifyLog), the same in every language. Activity has none. */
-  key?: string;
-  kind: MessageKind;
+export interface MessageText {
   title: string;
   body: string;
+}
+
+export interface Message {
+  /** Dedupe key: a message with a key is sent once. Activity has none. */
+  key?: string;
+  kind: MessageKind;
+  /** App path the notification opens. */
   url: string;
+  /** Notifications with the same tag replace each other on the device. */
   tag: string;
   urgency: 'high' | 'normal';
   toUids: Audience;
+  /** Seconds the push service keeps it for a device that's offline. */
+  ttl: number;
+  /** Title and body in a language. */
+  render(lang: Lang): MessageText;
 }
 
 export interface ComputeInput {
@@ -73,13 +96,14 @@ export interface ComputeInput {
   keyDates: KeyDate[];
   activity: Activity[];
   now: number;
-  lastRunAt?: number | null;
-  sentKeys?: ReadonlySet<string> | readonly string[];
 }
 
 export interface ComputeResult {
-  messages: OutMessage[];
+  /** Everything due now, including what may have been sent already (the caller filters by key). */
+  messages: Message[];
   activityIdsToMark: string[];
+  /** Keys handled without a message (a daily summary with nothing to say): record them as sent. */
+  quietKeys: string[];
 }
 
 // ---------- settings ----------
@@ -91,7 +115,12 @@ export function householdTz(h: Pick<Household, 'timezone'>): string {
   if (!tz) return DEFAULT_TZ;
   let ok = tzValid.get(tz);
   if (ok === undefined) {
-    try { new Intl.DateTimeFormat('en-US', { timeZone: tz }); ok = true; } catch { ok = false; }
+    try {
+      new Intl.DateTimeFormat('en-US', { timeZone: tz });
+      ok = true;
+    } catch {
+      ok = false;
+    }
     tzValid.set(tz, ok);
   }
   return ok ? tz : DEFAULT_TZ;
@@ -107,41 +136,33 @@ export function notifySettings(h: Pick<Household, 'notify'>): NotifySettings {
   };
 }
 
-/** Start (exclusive) of this run's reminder window. */
-export function reminderWindowStart(now: number, lastRunAt?: number | null): number {
-  if (lastRunAt == null || !Number.isFinite(lastRunAt)) return now - FIRST_RUN_LOOKBACK;
-  return Math.max(lastRunAt, now - MAX_CATCHUP);
-}
-
 export const dailyKey = (date: DateStr) => `daily_${date}`;
 
 /** Are we in the daily summary's time window (regardless of whether it was already sent)? */
-export function isDailyWindow(h: Household, now: number): boolean {
+export function isDailyWindow(h: Pick<Household, 'notify' | 'timezone'>, now: number): boolean {
   const s = notifySettings(h);
   if (!s.dailySummary) return false;
   const hour = zonedParts(now, householdTz(h)).hour;
   return hour >= s.dailyHour && hour < s.dailyHour + DAILY_WINDOW_HOURS;
 }
 
-/** Language of a device's notifications (missing or unknown ⇒ 'es'). */
-export function deviceLang(d: Pick<Device, 'lang'>): Lang {
-  return toLang(d.lang);
-}
-
 // ---------- helpers ----------
 
-const TIME_RE = /^([01]?\d|2[0-3]):([0-5]\d)$/;
-const isTime = (t: unknown): t is string => typeof t === 'string' && TIME_RE.test(t);
+const endOfDay = (date: DateStr, tz: string) => zonedToUtc(addDays(date, 1), '00:00', tz);
+/** TTL (seconds) for a notification that's pointless after `until`. */
+const ttlUntil = (until: number, now: number) => Math.max(MIN_TTL_S, Math.ceil((until - now) / 1000));
 
 function memberNames(ids: string[] | undefined, members: Member[], tx: Texts): string {
   if (!ids?.length) return '';
-  const byId = new Map(members.map((m) => [m.id, m.name]));
-  return tx.list(ids.map((id) => byId.get(id) ?? '').filter(Boolean));
+  const byId = new Map(members.map((m) => [m.id, clip(m.name.trim(), LIMITS.memberName)]));
+  return tx.list(ids.map((id) => byId.get(id) ?? ''));
 }
 
-// ---------- 1. event reminders ----------
+// ---------- event reminders ----------
 
-const validReminder = (m: unknown): m is number => typeof m === 'number' && Number.isFinite(m) && m >= 0;
+/** A reminder the notifier honours: a whole number of minutes up to the longest option the app offers. */
+const validReminder = (m: unknown): m is number =>
+  typeof m === 'number' && Number.isInteger(m) && m >= 0 && m <= MAX_REMINDER_MINS;
 
 /**
  * Instant at which an occurrence's reminder fires.
@@ -153,7 +174,7 @@ const validReminder = (m: unknown): m is number => typeof m === 'number' && Numb
  */
 export function reminderFireAt(ev: Pick<CalEvent, 'startTime' | 'reminderMins'>, date: DateStr, tz: string): number {
   const mins = ev.reminderMins ?? 0;
-  if (isTime(ev.startTime)) {
+  if (isTimeStr(ev.startTime)) {
     const days = Math.floor(mins / 1440);
     return zonedToUtc(addDays(date, -days), ev.startTime, tz) - (mins - days * 1440) * MINUTE;
   }
@@ -164,99 +185,97 @@ export function reminderFireAt(ev: Pick<CalEvent, 'startTime' | 'reminderMins'>,
   return zonedToUtc(addDays(date, dayOff), hhmm, tz);
 }
 
-/** Days ahead that must be expanded to cover the longest reminder. */
-export function reminderLookaheadDays(events: Pick<CalEvent, 'reminderMins'>[]): number {
-  let max = 0;
-  for (const e of events) if (validReminder(e.reminderMins)) max = Math.max(max, e.reminderMins);
-  return Math.max(2, Math.ceil(max / 1440) + 1);
-}
-
 function reminderBody(o: Occurrence, today: DateStr, members: Member[], tx: Texts): string {
   const ev = o.event;
-  let when = tx.reminderWhen(o.date, isTime(ev.startTime) ? ev.startTime : null, today);
+  let when = tx.reminderWhen(o.date, isTimeStr(ev.startTime) ? ev.startTime : null, today);
   if (o.endDate > o.date) when += tx.until(o.endDate);
   const bits = [when];
   const names = memberNames(ev.memberIds, members, tx);
   if (names) bits.push(names);
-  if (ev.location?.trim()) bits.push(ev.location.trim());
+  const place = clip(ev.location?.trim() ?? '', LIMITS.place);
+  if (place) bits.push(place);
   return bits.join(' · ');
 }
 
-function eventReminders(
-  events: CalEvent[], members: Member[], tz: string, today: DateStr,
-  now: number, windowStart: number, sent: ReadonlySet<string>, tx: Texts,
-): OutMessage[] {
+function eventReminders(events: CalEvent[], members: Member[], tz: string, today: DateStr, now: number): Message[] {
   const withRem = events.filter((e) => validReminder(e.reminderMins));
   if (!withRem.length) return [];
   const from = addDays(today, -1);
-  const occs = expandEvents(withRem, from, addDays(today, reminderLookaheadDays(withRem)));
-  const out: OutMessage[] = [];
-  for (const o of occs) {
+  const out: Message[] = [];
+  for (const o of expandEvents(withRem, from, addDays(today, REMINDER_LOOKAHEAD_DAYS))) {
     if (o.date < from) continue; // multi-day event that started earlier: its reminder is long gone
-    const fireAt = reminderFireAt(o.event, o.date, tz);
-    if (!(fireAt > windowStart && fireAt <= now)) continue;
-    const key = `ev_${o.event.id}_${o.date}_${o.event.reminderMins}`;
-    if (sent.has(key)) continue;
+    const ev = o.event;
+    const fireAt = reminderFireAt(ev, o.date, tz);
+    if (fireAt > now || fireAt <= now - REMINDER_CATCHUP) continue;
+    const startTime = isTimeStr(ev.startTime) ? ev.startTime : null;
+    const start = startTime ? zonedToUtc(o.date, startTime, tz) : null;
+    if (start !== null && now > start + REMINDER_GRACE_AFTER_START) continue;
     out.push({
-      key,
+      key: `ev_${ev.id}_${o.date}_${ev.reminderMins}`,
       kind: 'reminder',
-      title: o.event.title?.trim() || tx.untitledEvent,
-      body: reminderBody(o, today, members, tx),
-      url: URLS.calendar,
-      tag: `ev_${o.event.id}_${o.date}`,
+      url: routePath('calendar'),
+      tag: `ev_${ev.id}_${o.date}`,
       urgency: 'high',
       toUids: 'all',
+      ttl: ttlUntil(start !== null ? start + REMINDER_GRACE_AFTER_START : endOfDay(o.date, tz), now),
+      render(lang) {
+        const tx = texts(lang);
+        return {
+          title: clip(ev.title.trim(), LIMITS.title) || tx.untitledEvent,
+          body: reminderBody(o, today, members, tx),
+        };
+      },
     });
   }
   return out;
 }
 
-// ---------- 4. key dates ----------
+// ---------- key dates ----------
 
 const KD_EMOJI: Record<KeyDateKind, string> = {
-  birthday: '🎂', car: '🚗', insurance: '🛡️', bill: '🧾', health: '🩺', school: '🎒', other: '📌',
+  birthday: '🎂',
+  car: '🚗',
+  insurance: '🛡️',
+  bill: '🧾',
+  health: '🩺',
+  school: '🎒',
+  other: '📌',
 };
 /** Kinds that "fall due" (Vence… / Due…). */
 const KD_DUE: ReadonlySet<string> = new Set(['car', 'insurance', 'bill']);
 /** Birthday titles that already say so ("Cumple de la abuela", "Grandma's birthday") are kept as is. */
 const SAYS_BIRTHDAY = /^cumple|birthday/i;
 
-const kdEmoji = (kd: KeyDate) => KD_EMOJI[kd.kind] ?? KD_EMOJI.other;
-const hasAmount = (kd: KeyDate) => typeof kd.amount === 'number' && kd.amount > 0;
+const hasAmount = (kd: KeyDate): kd is KeyDate & { amount: number } => typeof kd.amount === 'number' && kd.amount > 0;
 
 /** Next date (>= today). Birthdays repeat every year even if stored wrongly. */
-export function keyDateNext(kd: KeyDate, today: DateStr): DateStr | null {
+function keyDateNext(kd: KeyDate, today: DateStr): DateStr | null {
   return nextKeyDate(kd.kind === 'birthday' ? { ...kd, repeat: 'yearly' } : kd, today);
 }
 
 /** Age turned on `d` (null if the date of birth has no credible year). */
-export function birthdayAge(kd: KeyDate, d: DateStr): number | null {
+function birthdayAge(kd: KeyDate, d: DateStr): number | null {
   const born = parts(kd.date).y;
   const age = parts(d).y - born;
   return born >= 1900 && age >= 1 && age < 130 ? age : null;
 }
 
-export function keyDateTitle(kd: KeyDate, lang: Lang = DEFAULT_LANG): string {
-  const tx = texts(lang);
-  const t = kd.title?.trim() ?? '';
+function keyDateTitle(kd: KeyDate, tx: Texts): string {
+  const t = clip(kd.title.trim(), LIMITS.title);
   if (kd.kind === 'birthday') return `🎂 ${SAYS_BIRTHDAY.test(t) ? t : tx.birthdayOf(t)}`;
-  return `${kdEmoji(kd)} ${t || tx.untitledKeyDate}`;
+  return `${KD_EMOJI[kd.kind] ?? KD_EMOJI.other} ${t || tx.untitledKeyDate}`;
 }
 
-export function keyDateBody(kd: KeyDate, d: DateStr, today: DateStr, lang: Lang = DEFAULT_LANG): string {
-  const tx = texts(lang);
+function keyDateBody(kd: KeyDate, d: DateStr, today: DateStr, tx: Texts): string {
   const n = diffDays(d, today);
   if (kd.kind === 'birthday') return tx.birthdayBody(n, birthdayAge(kd, d), d, today);
-  let body = tx.keyDateBody(n, KD_DUE.has(kd.kind), d, today);
-  if (hasAmount(kd)) body += ` · ${tx.money(kd.amount!)}`;
-  return body;
+  const body = tx.keyDateBody(n, KD_DUE.has(kd.kind), d, today);
+  return hasAmount(kd) ? `${body} · ${tx.money(kd.amount)}` : body;
 }
 
-function keyDateMessages(
-  keyDates: KeyDate[], today: DateStr, hour: number, sent: ReadonlySet<string>, lang: Lang,
-): OutMessage[] {
+function keyDateMessages(keyDates: KeyDate[], today: DateStr, hour: number, tz: string, now: number): Message[] {
   if (hour < KEYDATE_HOUR) return [];
-  const out: OutMessage[] = [];
+  const out: Message[] = [];
   for (const kd of keyDates) {
     const d = keyDateNext(kd, today);
     if (!d) continue;
@@ -266,111 +285,167 @@ function keyDateMessages(
     if (diff === rd) fire.push(rd);
     if (rd > 0 && diff === 0) fire.push(0);
     for (const r of fire) {
-      const key = `kd_${kd.id}_${d}_${r}`;
-      if (sent.has(key)) continue;
       out.push({
-        key,
+        key: `kd_${kd.id}_${d}_${r}`,
         kind: 'keydate',
-        title: keyDateTitle(kd, lang),
-        body: keyDateBody(kd, d, today, lang),
-        url: URLS.dates,
+        url: routePath('dates'),
         tag: `kd_${kd.id}_${d}`,
         urgency: 'normal',
         toUids: 'all',
+        ttl: ttlUntil(endOfDay(today, tz), now),
+        render(lang) {
+          const tx = texts(lang);
+          return { title: keyDateTitle(kd, tx), body: keyDateBody(kd, d, today, tx) };
+        },
       });
     }
   }
   return out;
 }
 
-// ---------- 3. daily summary ----------
+// ---------- daily summary ----------
 
-const MAX_DAILY_EVENTS = 6;
-const MAX_TASK_TITLES = 3;
+interface DailyContent {
+  today: DateStr;
+  hour: number;
+  events: { time: string | null; title: string }[];
+  lunch: string;
+  dinner: string;
+  tasks: Task[];
+  keyDates: KeyDate[];
+}
 
-export function dailySummary(
-  input: Pick<ComputeInput, 'household' | 'events' | 'tasks' | 'menuToday' | 'keyDates' | 'now'>,
-  sent: ReadonlySet<string> = new Set(),
-  lang: Lang = DEFAULT_LANG,
-): OutMessage | null {
-  const { household, now } = input;
-  if (!isDailyWindow(household, now)) return null;
-  const tx = texts(lang);
-  const tz = householdTz(household);
-  const { date: today, hour } = zonedParts(now, tz);
-  const key = dailyKey(today);
-  if (sent.has(key)) return null;
-
-  const lines: string[] = [];
+function renderDaily(c: DailyContent, tx: Texts): MessageText {
+  const { today } = c;
   const byTitle = (a: string, b: string) => a.localeCompare(b, tx.locale);
+  const lines: string[] = [];
 
   // Today's events: all-day ones (or ones carried over from earlier days) first.
-  const occs = expandEvents(input.events, today, today).filter((o) => occursOn(o, today));
-  const rows = occs.map((o) => {
-    const timed = isTime(o.event.startTime) && o.date === today;
-    return {
-      sort: timed ? o.event.startTime! : '',
-      label: timed ? fmtTime(o.event.startTime!) : tx.allDay,
-      title: o.event.title?.trim() || tx.untitledEvent,
-    };
-  }).sort((a, b) => (a.sort === b.sort ? byTitle(a.title, b.title) : a.sort < b.sort ? -1 : 1));
+  const rows = c.events
+    .map((e) => ({
+      sort: e.time ?? '',
+      label: e.time ? fmtTime(e.time) : tx.allDay,
+      title: e.title || tx.untitledEvent,
+    }))
+    .sort((a, b) => (a.sort === b.sort ? byTitle(a.title, b.title) : a.sort < b.sort ? -1 : 1));
   for (const r of rows.slice(0, MAX_DAILY_EVENTS)) lines.push(`${r.label} · ${r.title}`);
   if (rows.length > MAX_DAILY_EVENTS) lines.push(tx.moreEvents(rows.length - MAX_DAILY_EVENTS));
 
-  // Menu
-  const menu = input.menuToday;
   const meal: string[] = [];
-  if (menu?.lunch?.trim()) meal.push(`${tx.lunch}: ${menu.lunch.trim()}`);
-  if (menu?.dinner?.trim()) meal.push(`${tx.dinner}: ${menu.dinner.trim()}`);
+  if (c.lunch) meal.push(`${tx.lunch}: ${c.lunch}`);
+  if (c.dinner) meal.push(`${tx.dinner}: ${c.dinner}`);
   if (meal.length) lines.push(`🍽️ ${meal.join(' · ')}`);
 
-  // Tasks due today or overdue
-  const due = input.tasks
-    .filter((t) => !t.done && typeof t.due === 'string' && t.due <= today)
-    .sort((a, b) => (a.due! === b.due! ? byTitle(a.title, b.title) : a.due! < b.due! ? -1 : 1));
-  if (due.length === 1) {
-    lines.push(`✅ ${tx.oneTask(due[0].title, due[0].due! < today)}`);
+  // Tasks due today or overdue (oldest first)
+  const due = c.tasks
+    .map((t) => ({ title: clip(t.title.trim(), LIMITS.title), due: t.due ?? today }))
+    .sort((a, b) => (a.due === b.due ? byTitle(a.title, b.title) : a.due < b.due ? -1 : 1));
+  const [first] = due;
+  if (first && due.length === 1) {
+    lines.push(`✅ ${tx.oneTask(first.title, first.due < today)}`);
   } else if (due.length > 1) {
-    const overdue = due.filter((t) => t.due! < today).length;
-    lines.push(`✅ ${tx.manyTasks(due.length, overdue, tx.list(due.map((t) => t.title), MAX_TASK_TITLES))}`);
+    const overdue = due.filter((t) => t.due < today).length;
+    lines.push(
+      `✅ ${tx.manyTasks(
+        due.length,
+        overdue,
+        tx.list(
+          due.map((t) => t.title),
+          MAX_TASK_TITLES,
+        ),
+      )}`,
+    );
   }
 
-  // Today's key dates
-  for (const kd of input.keyDates) {
-    if (keyDateNext(kd, today) !== today) continue;
-    let l = keyDateTitle(kd, lang);
+  for (const kd of c.keyDates) {
+    let l = keyDateTitle(kd, tx);
     if (kd.kind === 'birthday') {
       const age = birthdayAge(kd, today);
       if (age != null) l += ` (${tx.ageNote(age)})`;
     } else {
       if (KD_DUE.has(kd.kind)) l += ` · ${tx.dueToday}`;
-      if (hasAmount(kd)) l += ` · ${tx.money(kd.amount!)}`;
+      if (hasAmount(kd)) l += ` · ${tx.money(kd.amount)}`;
     }
     lines.push(l);
   }
 
-  if (!lines.length) return null;
+  return { title: `${tx.greeting(c.hour)} · ${tx.dayName(today)}`, body: lines.join('\n') };
+}
+
+/**
+ * The daily summary when its time window is open: the message, or null when
+ * there's nothing to tell today. Undefined outside the window.
+ */
+function dailySummary(
+  input: Pick<ComputeInput, 'household' | 'events' | 'tasks' | 'menuToday' | 'keyDates' | 'now'>,
+): { key: string; message: Message | null } | undefined {
+  const { household, now } = input;
+  if (!isDailyWindow(household, now)) return undefined;
+  const tz = householdTz(household);
+  const { date: today, hour } = zonedParts(now, tz);
+  const key = dailyKey(today);
+
+  const content: DailyContent = {
+    today,
+    hour,
+    events: expandEvents(input.events, today, today)
+      .filter((o) => occursOn(o, today))
+      .map((o) => {
+        const t = o.event.startTime;
+        return {
+          time: isTimeStr(t) && o.date === today ? t : null,
+          title: clip(o.event.title.trim(), LIMITS.title),
+        };
+      }),
+    lunch: clip(input.menuToday?.lunch?.trim() ?? '', LIMITS.dish),
+    dinner: clip(input.menuToday?.dinner?.trim() ?? '', LIMITS.dish),
+    tasks: input.tasks.filter((t) => !t.done && typeof t.due === 'string' && t.due <= today),
+    keyDates: input.keyDates.filter((kd) => keyDateNext(kd, today) === today),
+  };
+  const { events, lunch, dinner, tasks, keyDates } = content;
+  if (!events.length && !lunch && !dinner && !tasks.length && !keyDates.length) return { key, message: null };
+
+  const settings = notifySettings(household);
+  const windowEnd = settings.dailyHour + DAILY_WINDOW_HOURS;
+  const until = windowEnd >= 24 ? endOfDay(today, tz) : zonedToUtc(today, `${windowEnd}:00`, tz);
   return {
     key,
-    kind: 'daily',
-    title: `${tx.greeting(hour)} · ${tx.dayName(today)}`,
-    body: lines.join('\n'),
-    url: URLS.home,
-    tag: key,
-    urgency: 'normal',
-    toUids: 'all',
+    message: {
+      key,
+      kind: 'daily',
+      url: routePath('home'),
+      tag: key,
+      urgency: 'normal',
+      toUids: 'all',
+      ttl: ttlUntil(until, now),
+      render: (lang) => renderDaily(content, texts(lang)),
+    },
   };
 }
 
-// ---------- 2. activity ----------
+// ---------- activity ----------
 
 const KIND_ORDER: ActivityKind[] = ['shopping', 'event', 'task', 'date', 'expense', 'note', 'menu'];
 /** App screen that each kind of activity opens. */
-const KIND_URL: Record<ActivityKind, string> = {
-  shopping: URLS.shopping, event: URLS.calendar, task: URLS.tasks, date: URLS.dates,
-  expense: URLS.expenses, note: URLS.notes, menu: URLS.menu,
+const KIND_ROUTE: Record<ActivityKind, Route> = {
+  shopping: 'shopping',
+  event: 'calendar',
+  task: 'tasks',
+  date: 'dates',
+  expense: 'expenses',
+  note: 'notes',
+  menu: 'menu',
 };
-const MAX_ACTIVITY_ITEMS = 8;
+
+/** Oldest first; same instant ⇒ by id, so every run agrees on which one is the latest. */
+export const byCreation = (a: Activity, b: Activity) =>
+  a.createdAt - b.createdAt || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
+
+/** Who did it: the household member linked to the account, else the name the app sent. */
+function actorName(actorUid: string, fallback: string, members: Member[] | undefined): string {
+  const member = actorUid ? members?.find((m) => m.uid === actorUid) : undefined;
+  return clip((member?.name || fallback).trim(), LIMITS.memberName);
+}
 
 /**
  * One notification per person with what they added. By default only counts
@@ -379,41 +454,55 @@ const MAX_ACTIVITY_ITEMS = 8;
  * previous one on the phone).
  */
 export function activityDigest(
-  activity: Activity[], now: number, opts: { includeNotified?: boolean } = {}, lang: Lang = DEFAULT_LANG,
-): OutMessage[] {
-  const tx = texts(lang);
+  activity: Activity[],
+  now: number,
+  opts: { includeNotified?: boolean; members?: Member[] } = {},
+): Message[] {
   const recent = activity
-    .filter((a) => (opts.includeNotified || !a.notified) && (a.createdAt ?? 0) >= now - ACTIVITY_MAX_AGE)
-    .sort((a, b) => (a.createdAt ?? 0) - (b.createdAt ?? 0));
+    .filter((a) => (opts.includeNotified || !a.notified) && a.createdAt >= now - ACTIVITY_MAX_AGE)
+    .sort(byCreation);
   const byActor = new Map<string, Activity[]>();
   for (const a of recent) {
-    const k = a.actorUid || '';
-    byActor.set(k, [...(byActor.get(k) ?? []), a]);
+    const list = byActor.get(a.actorUid) ?? [];
+    list.push(a);
+    byActor.set(a.actorUid, list);
   }
-  const out: OutMessage[] = [];
+  const out: Message[] = [];
   for (const [actorUid, items] of byActor) {
-    // Group by kind and drop duplicates (the same thing added twice; case-insensitive,
-    // the same in every language).
+    const first = items[0];
+    const last = items.at(-1);
+    if (!first || !last) continue;
+    // Group by kind and drop duplicates (the same thing added twice, case-insensitive).
     const byKind = new Map<string, { texts: string[]; count: number }>();
     for (const a of items) {
       const g = byKind.get(a.kind) ?? { texts: [], count: 0 };
       g.count++;
-      const t = (a.text ?? '').trim();
+      const t = clip(a.text.trim(), ACTIVITY_ITEM_CHARS);
       if (t && !g.texts.some((x) => x.toLowerCase() === t.toLowerCase())) g.texts.push(t);
       byKind.set(a.kind, g);
     }
-    const order = (k: string) => { const i = KIND_ORDER.indexOf(k as ActivityKind); return i < 0 ? 99 : i; };
-    const kinds = [...byKind.keys()].sort((a, b) => byKind.get(b)!.count - byKind.get(a)!.count || order(a) - order(b));
-    const dominant = kinds[0] as ActivityKind;
-    const last = items[items.length - 1];
+    const order = (k: string) => {
+      const i = KIND_ORDER.indexOf(k as ActivityKind);
+      return i < 0 ? 99 : i;
+    };
+    const count = (k: string) => byKind.get(k)?.count ?? 0;
+    const kinds = [...byKind.keys()].sort((a, b) => count(b) - count(a) || order(a) - order(b));
+    const dominant = KIND_ROUTE[kinds[0] as ActivityKind] as Route | undefined;
+    const name = actorName(actorUid, last.actorName, opts.members);
     out.push({
       kind: 'activity',
-      title: last.actorName?.trim() || tx.someone,
-      body: kinds.map((k) => tx.activityLine(k, byKind.get(k)!.texts, MAX_ACTIVITY_ITEMS)).join('\n'),
-      url: KIND_URL[dominant] ?? URLS.home,
-      tag: `act_${actorUid || 'anon'}_${items[0].createdAt ?? now}`,
+      url: routePath(dominant ?? 'home'),
+      tag: `act_${actorUid || 'anon'}_${first.createdAt}`,
       urgency: 'normal',
       toUids: actorUid ? { excludeUid: actorUid } : 'all',
+      ttl: ACTIVITY_TTL_S,
+      render(lang) {
+        const tx = texts(lang);
+        return {
+          title: name || tx.someone,
+          body: kinds.map((k) => tx.activityLine(k, byKind.get(k)?.texts ?? [], MAX_ACTIVITY_ITEMS)).join('\n'),
+        };
+      },
     });
   }
   return out;
@@ -422,53 +511,30 @@ export function activityDigest(
 // ---------- main entry point ----------
 
 /**
- * Computes a household's notifications for this run, worded in `lang`.
- * The result is the same for every language except for the text: same
- * messages, order, keys, tags, URLs and audiences.
- * The lists may come pre-filtered (see run.ts): it's enough that they include
- * the events that start or fall within [today−1, today+N], the recurring
- * ones, the pending tasks and all key dates.
+ * Computes what a household has due right now. The lists may come pre-filtered
+ * (see run.ts): it's enough that they include the events that start or fall
+ * within [today−1, today+REMINDER_LOOKAHEAD_DAYS], the recurring ones, the
+ * pending tasks and the key dates. Messages already sent are not filtered out
+ * here: the caller drops the ones whose key it has recorded.
  */
-export function computeNotifications(input: ComputeInput, lang: Lang = DEFAULT_LANG): ComputeResult {
+export function computeNotifications(input: ComputeInput): ComputeResult {
   const { household, now } = input;
-  const sent: ReadonlySet<string> = input.sentKeys instanceof Set
-    ? input.sentKeys
-    : new Set(input.sentKeys ?? []);
-  const tx = texts(lang);
   const tz = householdTz(household);
   const { date: today, hour } = zonedParts(now, tz);
-  const settings = notifySettings(household);
   const members = household.members ?? [];
 
-  const messages: OutMessage[] = [
-    ...eventReminders(input.events, members, tz, today, now, reminderWindowStart(now, input.lastRunAt), sent, tx),
-    ...keyDateMessages(input.keyDates, today, hour, sent, lang),
+  const messages: Message[] = [
+    ...eventReminders(input.events, members, tz, today, now),
+    ...keyDateMessages(input.keyDates, today, hour, tz, now),
   ];
-  const daily = dailySummary(input, sent, lang);
-  if (daily) messages.push(daily);
-  if (settings.activity) messages.push(...activityDigest(input.activity, now, {}, lang));
+  const quietKeys: string[] = [];
+  const daily = dailySummary(input);
+  if (daily?.message) messages.push(daily.message);
+  else if (daily) quietKeys.push(daily.key);
+  if (notifySettings(household).activity) messages.push(...activityDigest(input.activity, now, { members }));
 
   // All pending activity is marked (even if the notification is turned off or
   // it's old) so it doesn't pile up.
   const activityIdsToMark = input.activity.filter((a) => !a.notified).map((a) => a.id);
-  return { messages, activityIdsToMark };
-}
-
-/** Target devices of a message (no repeated endpoints). */
-export function selectDevices<D extends Pick<Device, 'uid' | 'subscription'>>(devices: D[], to: Audience): D[] {
-  const seen = new Set<string>();
-  return devices.filter((d) => {
-    const ep = d.subscription?.endpoint;
-    if (!ep || !d.subscription?.keys?.p256dh || !d.subscription?.keys?.auth) return false;
-    if (to !== 'all' && d.uid === to.excludeUid) return false;
-    if (seen.has(ep)) return false;
-    seen.add(ep);
-    return true;
-  });
-}
-
-/** What gets sent to the service worker. */
-export function pushPayload(m: Pick<OutMessage, 'title' | 'body' | 'url' | 'tag'>): string {
-  const body = m.body.length > 1500 ? `${m.body.slice(0, 1497)}…` : m.body;
-  return JSON.stringify({ title: m.title, body, url: m.url, tag: m.tag });
+  return { messages, activityIdsToMark, quietKeys };
 }

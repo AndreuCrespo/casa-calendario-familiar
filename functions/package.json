@@ -9,8 +9,9 @@
   "scripts": {
     "build": "esbuild src/index.ts --bundle --platform=node --target=node22 --format=esm --packages=external --outfile=lib/index.js",
     "typecheck": "tsc -p .",
-    "test": "tsx --test src/test.ts src/run.test.ts",
-    "vapid": "tsx src/vapid.ts"
+    "test": "tsx --test src/*.test.ts",
+    "check": "npm run typecheck && npm test && npm run build",
+    "vapid": "tsx scripts/vapid.ts"
   },
   "dependencies": {
     "firebase-admin": "^14.5.0",
